@@ -44,7 +44,11 @@ class Database():
             if messagebox.showerror("Connection Lost!", "Connection was lost! Please check your Internet Connection and try again!"):
                 exit(0)
         value = self.sheet.cell(f.row, f.col + 1).value
-        value = value.replace("\"", "")
+        value = value.replace("\"", "") 
+        if value != '':
+            value = value.split(", ")
+        else:
+            value = []
         return value
 
     def get_all_sections(self, class_str: str) -> list:
@@ -126,8 +130,10 @@ class Database():
                 exit(0)
         value = self.sheet.cell(f.row, f.col + 1).value
         value = value.replace("\"", "")
-        if value != None:
+        if value != '':
             value = value.split(", ")
+        else:
+            value = []
         value.append(class_str)
         value = [int(val) for val in value]
         value.sort()
@@ -241,22 +247,24 @@ class Database():
         all_ids.sort()
         return all_ids
 
-    def add_student(self, student_id: int, class_section_roll: str, name: str, DoB: str, fathersname: str, fatherscontact: str, mothersname: str, motherscontact: str, presentaddress: str, permanentaddress: str) -> None:
+    def get_classes_have_data(self):
+        all_values = self.sheet.col_values(2)
+        all_values = all_values[all_values.index("Class-Roll") + 1:]
+        all_values = [i for i in all_values if i]
+        classes = []
+        for data in all_values:
+            _class, _, _ = str(data).split("-")
+            if int(_class) not in classes:
+                classes.append(int(_class))
+        classes.sort()
+        return classes
+    
+    def add_student(self, student_id: str, class_section_roll: str, name: str, DoB: str, fathersname: str, fatherscontact: str, mothersname: str, motherscontact: str, presentaddress: str, permanentaddress: str) -> None:
         data = [student_id, class_section_roll, name, DoB, fathersname, fatherscontact, mothersname, motherscontact, presentaddress, permanentaddress]
         gclass, gsection, groll = str(class_section_roll).split("-")
-        # all_values = self.sheet.col_values(2)
-        # all_values = all_values[all_values.index("Class-Roll") + 1:]
-        # all_values = [i for i in all_values if i]
-        
-        # for value in all_values:
-        #     _class, _section, _roll = str(value).split("-")
-        #     if _class == gclass and _section == gsection:
-        # if 
-        classes = self.get_classes()
-        if classes:
-            if classes != None:
-                classes = classes.split(", ")
-            if gclass in classes:
+        classes_have_data = self.get_classes_have_data()
+        if classes_have_data:
+            if int(gclass) in classes_have_data:
                 sections = self.get_all_sections(gclass)
                 if str(gsection).lower() in sections:
                     rolls = self.get_rolls(gclass, str(gsection).lower())
@@ -264,41 +272,48 @@ class Database():
                     for roll in rolls:
                         if roll < int(groll):
                             last_roll = roll
-                    print(f"{gclass}-{gsection}-{last_roll}")
-                    _find = self.sheet.find(f"{gclass}-{gsection}-{last_roll}")
-                    self.sheet.append_row(data, table_range=f"A{_find.row+1}")
+                    if last_roll == 0:
+                        _rolls = rolls.copy()
+                        _rolls.append(int(groll))
+                        _rolls.sort()
+                        next_roll = _rolls[_rolls.index(int(groll)) + 1]                        
+                        _find = self.sheet.find(f"{gclass}-{gsection}-{next_roll}")
+                        self.sheet.insert_row(data, _find.row)
+                    else:
+                        _find = self.sheet.find(f"{gclass}-{gsection}-{last_roll}")
+                        self.sheet.insert_row(data, _find.row + 1)
                 else:
                     sections.append(gsection)
                     sections.sort()
                     last_section = ""
-                    print(sections, gsection, sections.index(gsection))
                     if sections.index(gsection) != 0:
                         last_section = sections[sections.index(gsection) - 1]
                         last_roll = self.get_rolls(gclass, last_section)[-1]
                         _find = self.sheet.find(f"{gclass}-{last_section}-{last_roll}")
-                        self.sheet.append_row(data, table_range=f"A{_find.row+1}")
+                        self.sheet.insert_row(data, _find.row + 1)
                     else:
-                        print("Not 0")
-                        next_section = self.get_all_sections(gclass)[sections.index(gsection)+1]
+                        next_section = sections[sections.index(gsection)+1]
                         first_roll = self.get_rolls(gclass, next_section)[0]
                         print(gclass, next_section, first_roll)
                         _find = self.sheet.find(f"{gclass}-{next_section}-{first_roll}")
-                        self.sheet.append_row(data, table_range=f"A{_find.row-1}")
-
-        # rolls = self.get_rolls(gclass, gsection)
-        # if rolls == []:
-        #     last_section = ""
-        #     sections = self.get_all_sections(gclass)
-        #     sections.append(str(gsection).lower())
-        #     sections.sort()
-        #     last_section = sections[sections.index(gsection) - 1]
-        # last_roll = 0
-        # for roll in rolls:
-        #     if roll < int(groll):
-        #         last_roll = roll
-        # if last_roll == 0:
-
-
+                        self.sheet.insert_row(data, _find.row)
+            else:
+                classes_have_data.append(int(gclass))
+                classes_have_data.sort()
+                if classes_have_data.index(int(gclass)) != 0:
+                    last_class = classes_have_data[classes_have_data.index(int(gclass)) - 1]
+                    last_section = self.get_all_sections(str(last_class))[-1]
+                    last_roll = self.get_rolls(str(last_class), str(last_section))[-1]
+                    _find = self.sheet.find(f"{last_class}-{last_section}-{last_roll}")
+                    self.sheet.insert_row(data, _find.row + 1)
+                else:
+                    next_class = classes_have_data[classes_have_data.index(int(gclass)) + 1]
+                    first_section = self.get_all_sections(str(next_class))[0]
+                    first_roll = self.get_rolls(str(next_class), first_section)[0]
+                    _find = self.sheet.find(f"{next_class}-{first_section}-{first_roll}")
+                    self.sheet.insert_row(data, _find.row)
+        else:
+            self.sheet.append_row(data)
 
 
 def splash():
@@ -454,7 +469,7 @@ def main(backWindow: ctk.CTk=None):
     newClassOpen = None
     
     def update_class_list(scrollableFrame: ctk.CTkScrollableFrame, classes: list):
-        if classes is None:
+        if not classes:
             ctk.CTkLabel(scrollableFrame, text="No class was assigned!", font=("Segoe UI", 13, "bold")).pack(anchor="center")
         else:
             totalStudentsDict = database.get_student_amount_by_class()
@@ -486,6 +501,8 @@ def main(backWindow: ctk.CTk=None):
 
                 except _tkinter.TclError:
                     pass
+            threading.Thread(target=build_info_frame, args=(infoFrame, ), daemon=True).start()
+
 
 
     def add_class():
@@ -501,8 +518,6 @@ def main(backWindow: ctk.CTk=None):
             for widget in scrollableFrame.winfo_children():
                 widget.destroy()
             classes = database.get_classes()
-            if classes != None:
-                classes = classes.split(", ")
             threading.Thread(target=update_class_list, args=(scrollableFrame, classes, ), daemon=True).start()
             addClassWin.after(1000, addClassWin.destroy)
 
@@ -577,7 +592,13 @@ def main(backWindow: ctk.CTk=None):
 
         addClassWin.mainloop()
 
-    
+    def build_info_frame(infoFrame: ctk.CTkFrame):
+        for widget in infoFrame.winfo_children():
+            widget.destroy()
+        ctk.CTkLabel(infoFrame, text="Information", fg_color=('gray78', 'gray23'), font=("Segoe UI", 16, 'bold'), corner_radius=infoFrame.cget("corner_radius")).pack(padx=6, pady=6, fill="x")
+        ctk.CTkLabel(infoFrame, text=f"Total Students: {database.get_all_students_amount()}", font=("Consolas", 13)).place(x=6, y=40)
+        ctk.CTkLabel(infoFrame, text=f"Class Assigned: {len(classes)}", font=("Consolas", 13)).place(x=6, y=60)
+
     def on_closing():
         root.quit()
         for widget in root.winfo_children():
@@ -616,8 +637,6 @@ def main(backWindow: ctk.CTk=None):
     scrollableFrame.place(x=10, y=130)
     
     classes = database.get_classes()
-    if classes != None:
-        classes = classes.split(", ")
     addClassButton = ctk.CTkButton(root, text="Assign Class", corner_radius=6, font=("Segoe UI", 12), width=80)
     addClassButton.place(x=300, y=100)
     addClassButton.bind("<Button-1>", lambda e: add_class() if newClassOpen is None else [newClassOpen.focus_force(), newClassOpen.deiconify()])
@@ -626,9 +645,7 @@ def main(backWindow: ctk.CTk=None):
     infoFrame = ctk.CTkFrame(root, width=230, corner_radius=6)
     infoFrame.place(x=410, y=130)
     infoFrame.pack_propagate(0)
-    ctk.CTkLabel(infoFrame, text="Information", fg_color=('gray78', 'gray23'), font=("Segoe UI", 16, 'bold'), corner_radius=infoFrame.cget("corner_radius")).pack(padx=6, pady=6, fill="x")
-    ctk.CTkLabel(infoFrame, text=f"Total Students: {database.get_all_students_amount()}", font=("Consolas", 13)).place(x=6, y=40)
-    ctk.CTkLabel(infoFrame, text=f"Class Assigned: {len(classes)}", font=("Consolas", 13)).place(x=6, y=60)
+    threading.Thread(target=build_info_frame, args=(infoFrame, ), daemon=True).start()
     
     root.mainloop()
 
@@ -738,6 +755,7 @@ def assignStudentWindow(window: ctk.CTk, class_str: str):
                 presentAddressEntry.get("0.0", "end").strip(),
                 permanentAddressEntry.get("0.0", "end").strip()
             )
+            sectionWindow(root, class_str)
 
     def sectionComboboxCallback(choice, first: bool = False):
         rollEntry.configure(state="disabled")
@@ -757,7 +775,16 @@ def assignStudentWindow(window: ctk.CTk, class_str: str):
         if len(content) > 140:
             event.widget.delete("0.0", "end")
             event.widget.insert("0.0", content[:80])
-        
+    
+    def on_closing(isback: bool):
+        if isback:
+            if messagebox.askyesno("Hold On!", "By going back, any information entered here will be DELETED and IRRECOVERABLE!\nAre you sure you want to go back?"):
+                sectionWindow(root, class_str)
+        else:
+            if messagebox.askyesno("Hold On!", "By closing, any information entered here will be DELETED and IRRECOVERABLE!\nAre you sure you want to proceed?"):
+                root.destroy()
+
+    
     window.destroy()
     root = ctk.CTk()
     root.title(f"Adding Student on class {class_str}")
@@ -766,6 +793,7 @@ def assignStudentWindow(window: ctk.CTk, class_str: str):
     root.geometry(f"650x470+{positionRight}+{positionDown-50}")
     root.resizable(0, 0)
     root.wm_iconbitmap("./Assets/Logo.ico")
+    root.protocol("WM_DELETE_WINDOW", lambda: on_closing(False))
 
     aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Management", font=("Consolas", 12))
     aboutLabel.pack(anchor="se", side="bottom", padx=10)
@@ -786,7 +814,7 @@ def assignStudentWindow(window: ctk.CTk, class_str: str):
     dobEntry.bind("<FocusOut>", lambda e: DOBFormatter(dobEntry.get()))
     nameLabel = ctk.CTkLabel(root, text="Name:", font=("Segoe UI", 19, 'bold'))
     nameLabel.place(x=10, y=70)
-    nameEntry = ctk.CTkEntry(root, placeholder_text="Student Name", font=("Seoge UI", 17, 'bold'), border_width=1, width=250, height=25, validate="key", validatecommand=(root.register(validate_name), "%P"))
+    nameEntry = ctk.CTkEntry(root, placeholder_text="Student Name", font=("Seoge UI", 17, 'bold'), border_width=1, width=300, height=25, validate="key", validatecommand=(root.register(validate_name), "%P"))
     nameEntry.place(x=80, y=73)
     classLabel = ctk.CTkLabel(root, text=f"Class: {class_str}", font=("Consolas", 14))
     classLabel.place(x=10, y=100)
@@ -857,7 +885,7 @@ def assignStudentWindow(window: ctk.CTk, class_str: str):
     permanentAddressEntry.place(x=10, y=15)
     permanentAddressEntry.bind("<KeyRelease>", address_validator)
 
-    backButton = ctk.CTkButton(root, text="🢀", font=("Segoe UI", 13, "bold"), width=28, height=25, command=lambda: sectionWindow(root, class_str))
+    backButton = ctk.CTkButton(root, text="🢀", font=("Segoe UI", 13, "bold"), width=28, height=25, command=on_closing)
     backButton.place(x=2, y=2)
 
     root.mainloop()
