@@ -10,7 +10,7 @@ import _tkinter
 import os
 from tkinter import messagebox
 
-ctk.set_appearance_mode("light")
+ctk.set_appearance_mode("system")
 
 database = None
 assetsPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "Assets")
@@ -170,7 +170,6 @@ class Database():
             if messagebox.showerror("Connection Lost!", "Connection was lost! Please check your Internet Connection and try again!"):
                 exit(0)
         data = self.sheet.row_values(f.row)
-        data = [i for i in data if i]
         student_data = {}
         student_data['studentID'] = data[0]
         student_data['class'] = str(data[1]).split("-")[0]
@@ -184,7 +183,7 @@ class Database():
         student_data['presentAddress'] = data[8]
         student_data['permanentAddress'] = data[9]
 
-        return student_data
+        return data, student_data
 
     def delete_class(self, class_str: str) -> None:
         try:
@@ -240,14 +239,14 @@ class Database():
         roles.sort()
         return roles
 
-    def get_all_student_ids(self):
+    def get_all_student_ids(self) -> list:
         all_ids = self.sheet.col_values(1)
         all_ids = all_ids[all_ids.index("Student ID") + 1:]
         all_ids = [int(i) for i in all_ids if i]
         all_ids.sort()
         return all_ids
 
-    def get_classes_have_data(self):
+    def get_classes_have_data(self) -> list:
         all_values = self.sheet.col_values(2)
         all_values = all_values[all_values.index("Class-Roll") + 1:]
         all_values = [i for i in all_values if i]
@@ -314,7 +313,12 @@ class Database():
                     self.sheet.insert_row(data, _find.row)
         else:
             self.sheet.append_row(data)
-
+    
+    def update_student(self, data) -> None:
+        class_section_roll = data[1]
+        _find = self.sheet.find(class_section_roll)
+        self.sheet.delete_rows(_find.row)
+        self.sheet.insert_row(data, _find.row)
 
 def splash():
     global istypewrite
@@ -455,10 +459,7 @@ def splash():
     logo = ctk.CTkLabel(win, text="", image=ctk.CTkImage(Image.open(os.path.join(assetsPath, "Logo Dark.png")), Image.open(os.path.join(assetsPath, "Logo Light.png")), (150, 150)))
     logo.place(x=245, y=30)
 
-    # Start the typewrite function in a separate thread
     threading.Thread(target=typewrite, args=(loadingLabel, ), daemon=True).start()
-
-    # Schedule the load_database function to run in the main thread
     threading.Thread(target=load_database, daemon=True).start()
 
     win.mainloop()
@@ -593,8 +594,9 @@ def main(backWindow: ctk.CTk=None):
         addClassWin.mainloop()
 
     def build_info_frame(infoFrame: ctk.CTkFrame):
-        for widget in infoFrame.winfo_children():
-            widget.destroy()
+        if len(infoFrame.winfo_children()) != 0:
+            for widget in infoFrame.winfo_children():
+                widget.destroy()
         ctk.CTkLabel(infoFrame, text="Information", fg_color=('gray78', 'gray23'), font=("Segoe UI", 16, 'bold'), corner_radius=infoFrame.cget("corner_radius")).pack(padx=6, pady=6, fill="x")
         ctk.CTkLabel(infoFrame, text=f"Total Students: {database.get_all_students_amount()}", font=("Consolas", 13)).place(x=6, y=40)
         ctk.CTkLabel(infoFrame, text=f"Class Assigned: {len(classes)}", font=("Consolas", 13)).place(x=6, y=60)
@@ -625,7 +627,8 @@ def main(backWindow: ctk.CTk=None):
 
 
     aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Management", font=("Consolas", 12))
-    aboutLabel.pack(anchor="se", side="bottom", padx=10)
+    aboutLabel.pack(anchor="e", side="bottom", padx=10)        
+
     logoLabel = ctk.CTkLabel(root, text="", image=ctk.CTkImage(Image.open(os.path.join(assetsPath, "Logo Dark.png")), Image.open(os.path.join(assetsPath, "Logo Light.png")), (90, 90)))
     logoLabel.place(x=110)
     titleLabel1 = ctk.CTkLabel(root, text=" Rotary School, Khulna", font=("Arial Black", 30, "bold"))
@@ -646,12 +649,12 @@ def main(backWindow: ctk.CTk=None):
     infoFrame.place(x=410, y=130)
     infoFrame.pack_propagate(0)
     threading.Thread(target=build_info_frame, args=(infoFrame, ), daemon=True).start()
-    
+
     root.mainloop()
 
-def assignStudentWindow(window: ctk.CTk, class_str: str):
+def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
     global studentIDok, rollok, dobok
-
+    
     studentIDok = False
     rollok = False
     dobok = False
@@ -741,6 +744,50 @@ def assignStudentWindow(window: ctk.CTk, class_str: str):
         return False
 
 
+    def address_validator(event):
+        content = event.widget.get("0.0", "end")
+        if len(content) > 140:
+            event.widget.delete("0.0", "end")
+            event.widget.insert("0.0", content[:80])
+    
+    def update_student(old_data: list):
+        new_data = [
+            idEntry.get(), 
+            data[1], 
+            nameEntry.get(), 
+            dobEntry.get(), 
+            fnamevalueEntry.get(), 
+            fcontactvalueEntry.get(), 
+            mnamevalueEntry.get(),
+            mcontactvalueEntry.get(),
+            presentAddressEntry.get("0.0", "end").strip(),
+            permanentAddressEntry.get("0.0", "end").strip()
+        ]
+        if new_data != old_data:
+            database.update_student(new_data)
+        studentWindow(root, data[1])
+
+    def fillAll():
+        idEntry.unbind("<FocusOut>")
+        idEntry.delete("0", "end")
+        idEntry.insert(0, data[0])
+        idEntry.bind("<FocusOut>", lambda e: check_if_student_id_exists(int(idEntry.get())) if idEntry.get() not in ["", "Enter the Student ID", str(data[0])] else None)
+        dobEntry.insert(0, data[3])
+        nameEntry.insert(0, data[2]) 
+        classLabel = ctk.CTkLabel(root, text=f"Class: {class_str}", font=("Consolas", 14))
+        classLabel.place(x=10, y=100)    
+        sectionLabel.configure(text=f"Section: {data[1].split('-')[1].title()}")
+        sectionCombobox.place_forget()
+        rollLabel.configure(text=f"Roll: {data[1].split('-')[2]}")
+        rollEntry.place_forget()
+        fnamevalueEntry.insert(0, data[4])
+        fcontactvalueEntry.insert(0, data[5])
+        mnamevalueEntry.insert(0, data[6])
+        mcontactvalueEntry.insert(0, data[7])
+        presentAddressEntry.insert("0.0", data[8])
+        permanentAddressEntry.insert("0.0", data[9])
+        saveStudentButton.configure(text="Update", command=lambda: update_student(data))
+
     def save_student():
         if messagebox.askyesno("Hold on! ", f"Please give a cross check as you will not able to edit the Section, Roll later!\nDo you want to proceed?"):
             database.add_student(
@@ -769,13 +816,6 @@ def assignStudentWindow(window: ctk.CTk, class_str: str):
                 sectionCombobox.set("A")
             rollEntry.insert(0, 1)
     
-    
-    def address_validator(event):
-        content = event.widget.get("0.0", "end")
-        if len(content) > 140:
-            event.widget.delete("0.0", "end")
-            event.widget.insert("0.0", content[:80])
-    
     def on_closing(isback: bool):
         if isback:
             if messagebox.askyesno("Hold On!", "By going back, any information entered here will be DELETED and IRRECOVERABLE!\nAre you sure you want to go back?"):
@@ -798,8 +838,8 @@ def assignStudentWindow(window: ctk.CTk, class_str: str):
     aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Management", font=("Consolas", 12))
     aboutLabel.pack(anchor="se", side="bottom", padx=10)
 
-    deleteStudentButton = ctk.CTkButton(root, text="Save Student", font=("Segoe UI", 13), command=save_student)
-    deleteStudentButton.pack(anchor="se", pady=2, padx=10, side="right")
+    saveStudentButton = ctk.CTkButton(root, text="Save", font=("Segoe UI", 13), command=save_student)
+    saveStudentButton.pack(anchor="se", pady=2, padx=10, side="right")
     idLabel = ctk.CTkLabel(root, text=f"Student ID:", font=("Consolas", 13, 'bold'))
     idLabel.place(x=10, y=22)
     idEntry = ctk.CTkEntry(root, border_width=1, placeholder_text="Enter the Student ID", font=("Consolas", 12, 'bold'), height=18, width=160, validate="key", validatecommand=(root.register(validate_student_id), "%P"))
@@ -888,6 +928,9 @@ def assignStudentWindow(window: ctk.CTk, class_str: str):
     backButton = ctk.CTkButton(root, text="🢀", font=("Segoe UI", 13, "bold"), width=28, height=25, command=on_closing)
     backButton.place(x=2, y=2)
 
+    if data != None:
+        threading.Thread(target=fillAll, daemon=True).start()
+
     root.mainloop()
 
 def sectionWindow(window: ctk.CTk, class_str: str=None):
@@ -953,7 +996,7 @@ def sectionWindow(window: ctk.CTk, class_str: str=None):
     scrollableFrame.place(x=10, y=70)
     addStudentButton = ctk.CTkButton(root, text="Add Student", font=("Segoe UI", 13), command=lambda: assignStudentWindow(root, class_str))
     addStudentButton.pack(anchor="ne", pady=20, padx=10, side="right")
-    deleteClassButton = ctk.CTkButton(root, text="Remove Class", font=("Segoe UI", 13), command=delete_class)
+    deleteClassButton = ctk.CTkButton(root, text="Remove Class", font=("Segoe UI", 13), command=delete_class, fg_color=("#de0202", "#8B0000"), hover_color=("#8B0000", "#de0202"))
     deleteClassButton.pack(anchor="ne", pady=20, padx=10, side="right")
     threading.Thread(target=load_section_frames, args=(scrollableFrame, ), daemon=True).start()
 
@@ -1071,7 +1114,7 @@ def sectionStudentWindow(window: ctk.CTk, class_str: str, section_str: str):
 
     scrollableFrame = ctk.CTkScrollableFrame(root, height=250, width=610, label_text=f"Students of Class {class_str}/{section_str.title()}", label_font=("Segoe UI", 16, "bold"))
     scrollableFrame.place(x=10, y=70)
-    deleteSectionButton = ctk.CTkButton(root, text="Remove Section", font=("Segoe UI", 13), command=delete_section)
+    deleteSectionButton = ctk.CTkButton(root, text="Remove Section", font=("Segoe UI", 13), command=delete_section, fg_color=("#de0202", "#8B0000"), hover_color=("#8B0000", "#de0202"))
     deleteSectionButton.pack(anchor="ne", pady=5, padx=10, side="right")
     searchEntry = ctk.CTkEntry(root, placeholder_text="Type Name to be searched", width=175, height=26)
     searchEntry.place(x=400, y=40)
@@ -1091,7 +1134,7 @@ def studentWindow(window: ctk.CTk, class_position: str):
     root.resizable(0, 0)
     root.wm_iconbitmap("./Assets/Logo.ico")
 
-    data = database.get_student_data(class_position)
+    dataList, data = database.get_student_data(class_position)
     root.title(data['name'])
 
     
@@ -1104,8 +1147,10 @@ def studentWindow(window: ctk.CTk, class_position: str):
     aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Management", font=("Consolas", 12))
     aboutLabel.pack(anchor="se", side="bottom", padx=10)
 
-    deleteStudentButton = ctk.CTkButton(root, text="Remove Student", font=("Segoe UI", 13), command=delete_student)
+    deleteStudentButton = ctk.CTkButton(root, text="Remove Student", font=("Segoe UI", 13), command=delete_student, fg_color=("#de0202", "#8B0000"), hover_color=("#8B0000", "#de0202"))
     deleteStudentButton.pack(anchor="ne", pady=2, padx=10, side="right")
+    editStudentButton = ctk.CTkButton(root, text="Edit", font=("Segoe UI", 13), command=lambda: assignStudentWindow(root, class_position.split("-")[0], dataList))
+    editStudentButton.pack(anchor="ne", pady=2, padx=10, side="right")
     dobLabel = ctk.CTkLabel(root, text=f"Student ID: {data['studentID']}", font=("Consolas", 13, 'bold'))
     dobLabel.place(x=10, y=22)
     dobLabel = ctk.CTkLabel(root, text=f"Date of Birth: {data['dob']}", font=("Consolas", 13, 'bold'))
@@ -1165,10 +1210,9 @@ def studentWindow(window: ctk.CTk, class_position: str):
 
     backButton = ctk.CTkButton(root, text="🢀", font=("Segoe UI", 13, "bold"), width=28, height=25, command=lambda: sectionStudentWindow(root, class_position.split("-")[0], class_position.split("-")[1]))
     backButton.place(x=2, y=2)
-    
-
 
     root.mainloop()
+
 
 if __name__ == "__main__":
     splash()
