@@ -12,6 +12,7 @@ graph TD;
     subgraph MWG["Main Window"]
       NCB["New Class Button"]
       CL["Class List"]
+      SB["Settings Button"]
     end
     subgraph NCW["New Class Window"]
       SVB["Save Button"]
@@ -37,6 +38,15 @@ graph TD;
       STUIB["Update Student Information Button"]
       RMVSTB["Remove Student Button"]
     end
+    subgraph SW["Settings Window"]
+        CTAMS["Appearence & Color Theme Settings"]
+        PS["PIN Settings"]
+        PV["PIN Validation"]
+    end
+    subgraph AW["About Window"]
+        DI["Developer Informtion"]
+        OI["Other Informtion"]
+    end
 
     S --> PW;
     PW --> PM;
@@ -58,6 +68,10 @@ graph TD;
     STUIB -- Redirecting to Update Information --> SIEW;
     RMVSTB -- Redirection with Update --> STLW;
     RMVSTB -- Update --> DB;
+    SB --> SW;
+    PS -- PIN Validation --> PV;
+    PV --> DB;
+    PV -- Failed --> PS;
 ```
 
 ## Installation
@@ -67,8 +81,3 @@ We prioritize the security and privacy of student data and appreciate your under
 
 ## License
 This project is licensed under the [MIT License](./LICENSE).
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="https://github.com/Sayad-Uddin-Tahsin/Rotary-School-Student-Management/assets/89304780/21a87971-19a1-4dab-991b-90da918e2915">
-  <img alt="Logo" src="https://github.com/Sayad-Uddin-Tahsin/Rotary-School-Student-Management/assets/89304780/990108a8-e1bd-4ba5-8876-a43d94e67079" height=200 width=200>
-</picture>
