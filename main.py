@@ -9,11 +9,29 @@ from PIL import Image
 import _tkinter
 import os
 from tkinter import messagebox
+import json
+import darkdetect
 
-ctk.set_appearance_mode("system")
+with open("data.json", "r") as f:
+    data = json.load(f)
+    current_version = data["version"]
+    appearence_mode = data["appearence_mode"]
+    color_theme = data["color_theme"]
+
+ctk.set_appearance_mode(appearence_mode)
+ctk.set_default_color_theme(color_theme)
 
 database = None
 assetsPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "Assets")
+
+
+def edit_data(key, value):
+    with open("data.json", 'r') as f:
+        data = json.load(f)
+    data[key] = value
+    with open("data.json", 'w') as f:
+        json.dump(data, f, indent=4)
+
 
 class Database():
     def __init__(self) -> None:
@@ -319,6 +337,14 @@ class Database():
         _find = self.sheet.find(class_section_roll)
         self.sheet.delete_rows(_find.row)
         self.sheet.insert_row(data, _find.row)
+    
+    def change_pin(self, new_pin) -> None:
+        pE = ""
+        for c in new_pin:
+            pE += chr(ord(c) + 5)
+        _find = self.sheet.find("$Pin$")
+        self.sheet.update_cell(_find.row, _find.col + 1, pE)
+
 
 def splash():
     global istypewrite
@@ -464,11 +490,181 @@ def splash():
 
     win.mainloop()
 
+
 def main(backWindow: ctk.CTk=None):
-    global classes, newClassOpen
+    global classes, newClassOpen, settingsOpen
 
     newClassOpen = None
+    settingsOpen = None
+
+    def settingsWin():
+        global settingsOpen, pinok, cpinok
+
+        def on_closing():
+            global settingsOpen
+
+            settingsOpen = None
+            root.destroy()
+
+        def initiate_appearence_mode(mode: str):
+            if mode == "system":
+                if darkdetect.theme() == "Dark":
+                    ctk.set_appearance_mode("dark")
+                else:
+                    ctk.set_appearance_mode("light")
+                edit_data("appearence_mode", "system")    
+            if mode == "light":
+                edit_data("appearence_mode", "light")
+            if mode == "dark":
+                edit_data("appearence_mode", "dark")
+            ctk.set_appearance_mode(mode)
+
+        def initiate_color_theme(color: str):
+            if color == "blue":
+                edit_data("color_theme", "blue")
+            if color == "dark-blue":
+                edit_data("color_theme", "dark-blue")
+            if color == "green":
+                edit_data("color_theme", "green")
+            ctk.set_default_color_theme(color)
+            ctk.CTkLabel(frameTA, text="* Restart may require for update", font=("Segoe UI", 11, "italic")).place(x=115, y=115)
+        
+        pinok = False
+        cpinok = False
+        def validate_pin(text):
+            if text == "" or text.isdigit():
+                if len(text) > 5:
+                    return False
+                return True
+            else:
+                return False
+        
+        def validate_pin_length(obj, text):
+            global pinok
+
+            if len(text) != 5:
+                obj.configure(border_color=("#de0202", "#8B0000"))
+                pinok = False
+            else:
+                obj.configure(border_color=("#979DA2", "#565B5E"))
+                pinok = True
+        
+        def changePIN():
+            if not pinok:
+                if messagebox.showerror("PIN Length Error", "PIN must be 5 in length!"):
+                    root.focus_force()
+                return
+            if not cpinok:
+                if messagebox.showerror("Confirm PIN Mismatch", "PIN provided in \"New PIN\" & \"Confirm New PIN\" didn't match!"):
+                    root.focus_force()
+                return        
+            pin = database.get_pin()
+            current_pin = CpinEntry.get()
+            pEE = ""
+            for c in current_pin:
+                pEE += chr(ord(c) + 5)
+            if str(pin) == str(pEE):
+                if str(current_pin) == str(NpinEntry):
+                    if messagebox.showerror("New PIN Error", "New PIN can't be as same as the current PIN!"):
+                        root.focus_force()
+                    return
+                if messagebox.askyesnocancel("Are you sure?", "Are you sure you want to change the PIN? Once you've changed the PIN you WON'T be able to ACCESS this Software with the PREVIOUS PIN!"):
+                    database.change_pin(NpinEntry.get())
+                    CpinEntry.delete("0", "end")
+                    NpinEntry.delete("0", "end")
+                    CNpinEntry.delete("0", "end")
+                    if messagebox.showinfo("PIN Changed", "Software Access PIN is successfully changed!"):
+                        root.focus_force()
+                else:
+                    root.focus_force()
+            else:
+                if messagebox.showerror("Current PIN Mismatch", "Current PIN provided is not Correct! Please try again with the actual one!"):
+                    root.focus_force()            
+
+        def confirmPINmatch(npin, cnpin):
+            global cpinok
+
+            if str(cnpin) == str(npin):
+                CNpinEntry.configure(border_color=("#979DA2", "#565B5E"))
+                cpinok = True
+            else:
+                cpinok = False
+                CNpinEntry.configure(border_color=("#de0202", "#8B0000"))
     
+        root = ctk.CTk()
+        positionRight = int(root.winfo_screenwidth()/2 - 590/2)
+        positionDown = int(root.winfo_screenheight()/2 - 300/2)
+        root.geometry(f"590x300+{positionRight}+{positionDown-50}")
+        root.title(f"Settings")
+        root.resizable(0, 0)
+        root.wm_iconbitmap("./Assets/Logo.ico")
+        settingsOpen = root
+        root.protocol("WM_DELETE_WINDOW", on_closing)
+
+        aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Management", font=("Consolas", 12))
+        aboutLabel.pack(anchor="se", side="bottom", padx=10)
+        classTitle = ctk.CTkLabel(root, text=f"Settings", font=("Segoe UI", 30, 'bold'))
+        classTitle.pack(padx=10, pady=10, anchor="nw", side="left")
+
+        frameTA = ctk.CTkFrame(root, width=280, height=200, fg_color="transparent", border_width=2)
+        frameTA.place(x=10, y=70)
+        frameTA.pack_propagate(0)
+        frameTALabel = ctk.CTkLabel(root, text="Appearance and Theme", font=("Segoe UI", 14, 'bold'), padx=4)
+        frameTALabel.place(x=15, y=55)
+        serverModeLabel = ctk.CTkLabel(frameTA, text="Appearance Mode", font=("Segoe UI", 13, "bold"))
+        serverModeLabel.place(x=12, y=6)
+        serverintVarMode = ctk.IntVar(value=["system", "light", "dark"].index(appearence_mode))
+        serverRadiobuttonSystem = ctk.CTkRadioButton(master=frameTA, text="System", variable=serverintVarMode, value=0, command=lambda: initiate_appearence_mode("system"))
+        serverRadiobuttonSystem.place(x=12, y=36)
+        serverRadiobuttonLight = ctk.CTkRadioButton(master=frameTA, text="Light", variable=serverintVarMode, value=1, command=lambda: initiate_appearence_mode("light"))
+        serverRadiobuttonLight.place(x=100, y=36)
+        serverRadiobuttonDark = ctk.CTkRadioButton(master=frameTA, text="Dark", variable=serverintVarMode, value=2, command=lambda: initiate_appearence_mode("dark"))
+        serverRadiobuttonDark.place(x=170, y=36)
+
+        serverColorLabel = ctk.CTkLabel(frameTA, text="Color Theme", font=("Segoe UI", 13, "bold"))
+        serverColorLabel.place(x=12, y=60)
+        serverintVarColor = ctk.IntVar(value=["blue", "dark-blue", "green"].index(color_theme))
+        serverRadiobuttonBlue = ctk.CTkRadioButton(master=frameTA, text="Blue", variable=serverintVarColor, value=0, command=lambda: initiate_color_theme("blue"))
+        serverRadiobuttonBlue.place(x=12, y=90)
+        serverRadiobuttonDarkBlue = ctk.CTkRadioButton(master=frameTA, text="Dark Blue", variable=serverintVarColor, value=1, command=lambda: initiate_color_theme("dark-blue"))
+        serverRadiobuttonDarkBlue.place(x=75, y=90)
+        serverRadiobuttonGreen = ctk.CTkRadioButton(master=frameTA, text="Green", variable=serverintVarColor, value=2, command=lambda: initiate_color_theme("green"))
+        serverRadiobuttonGreen.place(x=170, y=90)
+
+        framePIN = ctk.CTkFrame(root, width=280, height=200, fg_color="transparent", border_width=2)
+        framePIN.place(x=300, y=70)
+        framePIN.pack_propagate(0)
+        framePINLabel = ctk.CTkLabel(root, text="Change PIN", font=("Segoe UI", 14, 'bold'), padx=4)
+        framePINLabel.place(x=305, y=55)
+    
+        CPINLabel = ctk.CTkLabel(framePIN, text="Current PIN", font=("Segoe UI", 13, "bold"))
+        CPINLabel.place(x=12, y=6)
+        CpinEntry = ctk.CTkEntry(framePIN, placeholder_text="Enter Current Pin", font=("Consolas", 13), height=26, width=160)
+        CpinEntry.configure(validate="key", validatecommand=(root.register(validate_pin), "%P"))
+        CpinEntry.place(x=12, y=30)
+        CpinEntry.bind("<KeyRelease>", lambda e: validate_pin_length(CpinEntry, CpinEntry.get()))
+        
+        NPINLabel = ctk.CTkLabel(framePIN, text="New PIN", font=("Segoe UI", 13, "bold"))
+        NPINLabel.place(x=12, y=60)
+        NpinEntry = ctk.CTkEntry(framePIN, placeholder_text="Enter 5 Digit New Pin", font=("Consolas", 13), height=26, width=160)
+        NpinEntry.configure(validate="key", validatecommand=(root.register(validate_pin), "%P"))
+        NpinEntry.place(x=12, y=84)
+        NpinEntry.bind("<KeyRelease>", lambda e: validate_pin_length(NpinEntry, NpinEntry.get()))
+            
+        CNPINLabel = ctk.CTkLabel(framePIN, text="Confirm New PIN", font=("Segoe UI", 13, "bold"))
+        CNPINLabel.place(x=12, y=114)
+        CNpinEntry = ctk.CTkEntry(framePIN, placeholder_text="New 5 Digit PIN Again", font=("Consolas", 13), height=26, width=160)
+        CNpinEntry.configure(validate="key", validatecommand=(root.register(validate_pin), "%P"))
+        CNpinEntry.place(x=12, y=138)
+        CNpinEntry.bind("<FocusIn>", lambda e: CNpinEntry.configure(border_color=("#de0202", "#8B0000")))
+        CNpinEntry.bind("<KeyRelease>", lambda e: validate_pin_length(CNpinEntry, CNpinEntry.get()))
+        CNpinEntry.bind("<KeyRelease>", lambda e: confirmPINmatch(NpinEntry.get(), CNpinEntry.get()))
+
+        SavePINbtn = ctk.CTkButton(framePIN, width=100, height=25, text="Change PIN", font=("Seoge UI", 13), command=changePIN)
+        SavePINbtn.pack(anchor="se", side="bottom", padx=12, pady=3)
+        
+        root.mainloop()
+
     def update_class_list(scrollableFrame: ctk.CTkScrollableFrame, classes: list):
         if not classes:
             ctk.CTkLabel(scrollableFrame, text="No class was assigned!", font=("Segoe UI", 13, "bold")).pack(anchor="center")
@@ -503,8 +699,6 @@ def main(backWindow: ctk.CTk=None):
                 except _tkinter.TclError:
                     pass
             threading.Thread(target=build_info_frame, args=(infoFrame, ), daemon=True).start()
-
-
 
     def add_class():
         global classes, newClassOpen
@@ -605,9 +799,11 @@ def main(backWindow: ctk.CTk=None):
         root.quit()
         for widget in root.winfo_children():
             widget.destroy()
-        root.destroy()
         if newClassOpen is not None:
             newClassOpen.destroy()
+        if settingsOpen is not None:
+            settingsOpen.destroy()
+        root.destroy()
     
     if backWindow is None:
         root = ctk.CTk()
@@ -628,7 +824,11 @@ def main(backWindow: ctk.CTk=None):
 
     aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Management", font=("Consolas", 12))
     aboutLabel.pack(anchor="e", side="bottom", padx=10)        
-
+    settingsLabel = ctk.CTkLabel(root, text="Settings", font=("Consolas", 12))
+    settingsLabel.pack(anchor="e", side="bottom", padx=10)
+    settingsLabel.bind("<Enter>", lambda e: settingsLabel.configure(cursor="hand2", font=("Consolas", 12, 'underline')))
+    settingsLabel.bind("<Leave>", lambda e: settingsLabel.configure(cursor="", font=("Consolas", 12)))
+    settingsLabel.bind("<Button-1>", lambda e: settingsWin() if settingsOpen is None else [settingsOpen.focus_force(), settingsOpen.deiconify()])
     logoLabel = ctk.CTkLabel(root, text="", image=ctk.CTkImage(Image.open(os.path.join(assetsPath, "Logo Dark.png")), Image.open(os.path.join(assetsPath, "Logo Light.png")), (90, 90)))
     logoLabel.place(x=110)
     titleLabel1 = ctk.CTkLabel(root, text=" Rotary School, Khulna", font=("Arial Black", 30, "bold"))
