@@ -11,10 +11,15 @@ import os
 from tkinter import messagebox
 import json
 import darkdetect
+import gspread
+from google.oauth2.service_account import Credentials
+import sys
+import urllib.parse
+import webbrowser
+import pyasn1.error
 
 with open("data.json", "r") as f:
     data = json.load(f)
-    current_version = data["version"]
     appearence_mode = data["appearence_mode"]
     color_theme = data["color_theme"]
 
@@ -35,9 +40,6 @@ def edit_data(key, value):
 
 class Database():
     def __init__(self) -> None:
-        import gspread
-        from google.oauth2.service_account import Credentials
-
         scopes = [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
@@ -353,11 +355,75 @@ def splash():
 
     def typewrite(obj: ctk.CTkLabel):
         global istypewrite
-        retry_count = 1
 
         while istypewrite:
             currentText = obj.cget("text")
             if "Getting things ready" in currentText:
+                if "..." in currentText:
+                    obj.configure(text=currentText.replace("...", ""))
+                else:
+                    obj.configure(text=f"{currentText}.")
+            time.sleep(1)
+
+    win = ctk.CTk()
+    win.wm_overrideredirect(True)
+    win.wm_iconbitmap("./Assets/Icon.ico")
+    win.title("Rotary School Student Manager")
+    positionRight = int(win.winfo_screenwidth()/2 - 650/2)
+    positionDown = int(win.winfo_screenheight()/2 - 400/2)
+    win.geometry(f"650x400+{positionRight}+{positionDown-50}")
+
+    pinFrame = ctk.CTkFrame(win, height=100, width=400, border_width=0, fg_color="transparent")
+    pinFrame.pack(anchor="center", side="bottom", pady=40)
+    pinFrame.pack_propagate(False)
+    loadingLabel = ctk.CTkLabel(pinFrame, text="Getting things ready", font=("Segoe UI", 15, "bold", "italic"))
+    loadingLabel.pack(anchor="center", side="bottom", pady=0)
+    mainLabel = ctk.CTkLabel(win, text="Rotary School Student Manager", font=("Segoe UI", 25, "bold"), justify="left")
+    mainLabel.pack(anchor="center", side="bottom")
+    logo = ctk.CTkLabel(win, text="", image=ctk.CTkImage(Image.open(os.path.join(assetsPath, "Logo Dark.png")), Image.open(os.path.join(assetsPath, "Logo Light.png")), (150, 150)))
+    logo.place(x=245, y=30)
+
+    threading.Thread(target=typewrite, args=(loadingLabel, ), daemon=True).start()
+    win.after(1500, lambda: dbloadWin(win))
+    win.mainloop()
+
+
+def ReportErrorSequence(win: ctk.CTk, url: str):
+    if messagebox.askyesno("Unexpected Error Raised!", "Rotary School Student Manager Software just hit an unexected error!\nWould you like to report it to the Developer, so that it can be solved as quickly as possible?"):
+        webbrowser.open(url)
+        time.sleep(2)
+        win.bell()
+        if messagebox.askyesno("Did you get redirected?", "Did you get redirected to a Mail Compose Page? Please wait a while before answering it!"):
+            messagebox.showinfo("Error Report", "Now press the 'Send' button to report the bug!\nOnce you sent, the developer will get you in touch as soon as possible! Sorry for the inconvenience!")
+            win.destroy()
+        else:
+            win.clipboard_append(url)
+            messagebox.showinfo("Report Error", "I'm sorry to hear that! I just copied the report URL for you! Please browse that in your preferred Browser and send the mail!\nSorry for the inconvenience caused by the error!")
+            win.destroy()
+    else:
+        messagebox.showinfo("Report Error", "You've cancelled the Error Reporting Sequence!\nYou may try restarting the software. If it doesn't fix the error, please report it next time!")
+        win.destroy()
+
+def dbloadWin(window):
+    window.destroy()
+
+    global istypewrite
+
+    istypewrite = True
+
+    def move_to_main():
+        global istypewrite
+
+        istypewrite = False
+        win.overrideredirect(False)
+        win.after(0, lambda: main(win))
+    
+    def typewrite(obj: ctk.CTkLabel):
+        global istypewrite
+
+        while istypewrite:
+            currentText = obj.cget("text")
+            if "Loading Database" in currentText:
                 if "..." in currentText:
                     obj.configure(text=currentText.replace("...", ""))
                 else:
@@ -367,18 +433,11 @@ def splash():
                 if sec != 1:
                     obj.configure(text=currentText.replace(str(sec), str(sec - 1)))
                 else:
-                    obj.configure(text=currentText.replace("Retrying in 1", "Retrying..."))
-                    retry_count += 1
-                    load_database(retry_count)
+                    obj.configure(text="Retrying to load Database...")
+                    load_database()
             time.sleep(1)
 
-    def move_to_main():
-        global istypewrite
-
-        istypewrite = False
-        win.overrideredirect(False)
-        win.after(0, lambda: [win.destroy(), main()])
-
+    
     def move_to_pin():
         win.attributes("-topmost", 1)
         win.focus_force()
@@ -416,8 +475,8 @@ def splash():
                 if i == 1:
                     e.focus_force()
                 e.configure(validate="key", validatecommand=(win.register(lambda text, obj=e: validate_entry(text, obj)), "%P"))
-                last_x_pos = i * 20
-                e.place(x=last_x_pos + i * 40, y=25)
+                last_x_pos = i * 25
+                e.place(x=last_x_pos + i * 45, y=25)
                 pin_entries.append(e)
         
             
@@ -447,49 +506,113 @@ def splash():
         pin_entries = []
         threading.Thread(target=gen_pin_entries, daemon=True).start()
 
-    def load_database(retry_count: int = 1):
-        global database
+    def load_database():
+        global database, istypewrite
         
-        if retry_count < 6:
-            done = False
-            try:
-                database = Database()
-                done = True
-                retry_count = 0
-            except (google.auth.exceptions.TransportError, requests.exceptions.ConnectionError, urllib3.exceptions.MaxRetryError, urllib3.exceptions.NewConnectionError):
-                loadingLabel.configure(text=f"No Internet Connection! Retrying in 5")
-            except google.auth.exceptions.RefreshError:
-                loadingLabel.configure(text=f"Computer time is incorrect! Retrying in 5")
-            if done:
-                move_to_pin()
-        else:
-            loadingLabel.configure(text="Computer time is incorrect!\nMax Retry Failed! Try Again Later!")
-            win.overrideredirect(False)
+        done = False
+        try:
+            database = Database()
+            done = True
+        except (google.auth.exceptions.TransportError, requests.exceptions.ConnectionError, urllib3.exceptions.MaxRetryError, urllib3.exceptions.NewConnectionError) as e:
+            loadingLabel.configure(text=f"Loading Failed, No Internet Connection! Retrying in 5")
+        except google.auth.exceptions.RefreshError:
+            loadingLabel.configure(text=f"Loading Failed, Computer time is incorrect! Retrying in 5")
+        except (gspread.exceptions.WorksheetNotFound, gspread.exceptions.SpreadsheetNotFound):
+            loadingLabel.configure(text=f"Database not found!")
+            istypewrite = False
+        except gspread.exceptions.GSpreadException as e:
+            istypewrite = False
+            win.bell()
+            e_type, e_object, e_traceback = sys.exc_info()
+            e_filename = os.path.split(
+                e_traceback.tb_frame.f_code.co_filename
+            )[1]
+            e_message = str(e)
+            e_line_number = e_traceback.tb_lineno
+            url = f"mailto:tahsin.ict@outlook.com?subject=Unexpected Error on Rotary School Student Manager&body=\nError Information:\n```\nType: {e_type}\nFile: {e_filename}\nLine: {e_line_number}\nMessage: {e_message}\n```\n\nRedirected from Rotary School Student Manager Software"
+            ReportErrorSequence(win, url)
+        except pyasn1.error.PyAsn1Error:
+            loadingLabel.configure(text=f"Database Credentials Error!")
+            if messagebox.askyesno("Credentials Error", "Credentials error usually raised when the  Database credentials are not correct! Please contact with the Developer!\nDo you want to send him Mail?"):
+                webbrowser.open("mailto:tahsin.ict@outlook.com?subject=Credendials Error on Rotary School Student Manager&body=%0A%0ARedirected from Rotary School Student Manager Software")
+            istypewrite = False
+        except Exception as e:
+            istypewrite = False
+            win.bell()
+            e_type, e_object, e_traceback = sys.exc_info()
+            e_filename = os.path.split(
+                e_traceback.tb_frame.f_code.co_filename
+            )[1]
+            e_message = str(e)
+            e_line_number = e_traceback.tb_lineno
+            url = f"mailto:tahsin.ict@outlook.com?subject=Unexpected Error on Rotary School Student Manager&body=\nError Information:\n```\nType: {e_type}\nFile: {e_filename}\nLine: {e_line_number}\nMessage: {e_message}\n```\n\nRedirected from Rotary School Student Manager Software"
+            ReportErrorSequence(win, url)
+        if done:
+            move_to_pin()
 
 
     win = ctk.CTk()
-    win.wm_overrideredirect(True)
-    win.wm_iconbitmap("./Assets/Logo.ico")
-    win.title("Rotary School Student Management")
+    win.wm_iconbitmap("./Assets/Icon.ico")
+    win.title("Rotary School Student Manager")
     positionRight = int(win.winfo_screenwidth()/2 - 650/2)
     positionDown = int(win.winfo_screenheight()/2 - 400/2)
     win.geometry(f"650x400+{positionRight}+{positionDown-50}")
 
-    pinFrame = ctk.CTkFrame(win, height=100, width=400, border_width=0, fg_color="transparent")
+    pinFrame = ctk.CTkFrame(win, height=100, width=450, border_width=0, fg_color="transparent")
     pinFrame.pack(anchor="center", side="bottom", pady=40)
     pinFrame.pack_propagate(False)
-    loadingLabel = ctk.CTkLabel(pinFrame, text="Getting things ready", font=("Segoe UI", 15, "bold", "italic"))
+    loadingLabel = ctk.CTkLabel(pinFrame, text="Loading Database", font=("Segoe UI", 15, "bold", "italic"))
     loadingLabel.pack(anchor="center", side="bottom", pady=0)
-    mainLabel = ctk.CTkLabel(win, text="Rotary School Student Management", font=("Segoe UI", 25, "bold"), justify="left")
+    mainLabel = ctk.CTkLabel(win, text="Rotary School Student Manager", font=("Segoe UI", 25, "bold"), justify="left")
     mainLabel.pack(anchor="center", side="bottom")
     logo = ctk.CTkLabel(win, text="", image=ctk.CTkImage(Image.open(os.path.join(assetsPath, "Logo Dark.png")), Image.open(os.path.join(assetsPath, "Logo Light.png")), (150, 150)))
     logo.place(x=245, y=30)
 
     threading.Thread(target=typewrite, args=(loadingLabel, ), daemon=True).start()
     threading.Thread(target=load_database, daemon=True).start()
-
+    win.focus_force()
     win.mainloop()
 
+def about():
+    root = ctk.CTkToplevel()
+    root.geometry(f"650x400")
+    root.title("Rotary School Student Manager")
+    root.resizable(0, 0)
+    root.wm_iconbitmap("./Assets/Icon.ico")
+
+    aboutLabel = ctk.CTkLabel(root, text=f"About", font=("Segoe UI", 30, 'bold'))
+    aboutLabel.place(x=10, y=10)
+    descriptionLabel = ctk.CTkLabel(root, text="Rotary School Student Manager is a Software made for Rotary School Khulna for organizing the Student Information in a Digital Way!", font=("Segoe UI", 13), wraplength=600, justify="left")
+    descriptionLabel.place(x=10, y=60)
+    sourceLabel = ctk.CTkLabel(root, text=f"Software Source Code is available at: ", font=("Seoge UI", 12, "bold"))
+    sourceLabel.place(x=10, y=100)
+    sourceHyperLabel = ctk.CTkLabel(root, text="GitHub: Sayad-Uddin-Tahsin/Rotary-School-Student-Management", font=("Seoge UI", 12, "underline"), text_color="#0078D7")
+    sourceHyperLabel.place(x=225, y=100)
+    sourceHyperLabel.bind("<Enter>", lambda e: sourceHyperLabel.configure(cursor="hand2"))
+    sourceHyperLabel.bind("<Leave>", lambda e: sourceHyperLabel.configure(cursor=""))
+    sourceHyperLabel.bind("<Button-1>", lambda e: webbrowser.open("explorer \"https://github.com/Sayad-Uddin-Tahsin/Rotary-School-Student-Management\""))
+
+    devFrame = ctk.CTkFrame(root, width=450, height=200, corner_radius=6, border_width=1, fg_color="transparent")
+    devFrame.place(x=100, y=140)
+    imageLabel = ctk.CTkLabel(devFrame, text="", image=ctk.CTkImage(Image.open(os.path.join(assetsPath, "Tahsin.png")), Image.open(os.path.join(assetsPath, "Tahsin.png")), (50, 50)))
+    imageLabel.place(x=30, y=10)
+    ctk.CTkLabel(devFrame, text="Mohammad Sayad Uddin Tahsin", font=("Arial Black", 18, "bold")).place(x=90, y=10)
+    ctk.CTkLabel(devFrame, text="Developer of Rotary School Student Manager", font=("Segoe UI", 14, 'bold')).place(x=90, y=35)
+    text = """
+This is Sayad Uddin Tahsin, a student of class 8 (2023) of Rotary School, Khulna. I have a passion for software development and technology. This software is a product of my dedication and interest in creating solutions through code. \nI hope you find it useful and enjoy using it.
+"""
+    ctk.CTkLabel(devFrame, text=text, font=("Segoe UI", 13), wraplength=450, justify="left").place(x=10, y=60)
+    ctk.CTkLabel(devFrame, text="For any query, please reach me at:", font=("Segoe UI", 13)).place(x=10, y=165)
+    mailLabel = ctk.CTkLabel(devFrame, text="Email", font=("Segoe UI", 13, 'underline'), text_color="#0078D7")
+    mailLabel.place(x=215, y=165)
+    mailLabel.bind("<Enter>", lambda e: mailLabel.configure(cursor="hand2"))
+    mailLabel.bind("<Leave>", lambda e: mailLabel.configure(cursor=""))
+    mailLabel.bind("<Button-1>", lambda e: webbrowser.open("explorer \"mailto:tahsin.ict@outlook.com?subject=Query for Rotary School Student Manager&body=\n\n\nRedirected from Rotary School Student Manager Software\""))
+
+    versionLabel = ctk.CTkLabel(root, text=f"Rotary School Student Manager v1.0 is running on your computer.", font=("Seoge UI", 15, "bold"))
+    versionLabel.place(x=10, y=360)
+    root.after(100, root.lift)
+    root.mainloop()
 
 def main(backWindow: ctk.CTk=None):
     global classes, newClassOpen, settingsOpen
@@ -564,7 +687,7 @@ def main(backWindow: ctk.CTk=None):
             for c in current_pin:
                 pEE += chr(ord(c) + 5)
             if str(pin) == str(pEE):
-                if str(current_pin) == str(NpinEntry):
+                if str(current_pin) == str(NpinEntry.get()):
                     if messagebox.showerror("New PIN Error", "New PIN can't be as same as the current PIN!"):
                         root.focus_force()
                     return
@@ -573,8 +696,13 @@ def main(backWindow: ctk.CTk=None):
                     CpinEntry.delete("0", "end")
                     NpinEntry.delete("0", "end")
                     CNpinEntry.delete("0", "end")
+                    CpinEntry.configure(placeholder_text="Enter Current PIN")
+                    NpinEntry.configure(placeholder_text="Enter 5 Digit New PIN")
+                    CNpinEntry.configure(placeholder_text="New 5 Digit PIN Again")
                     if messagebox.showinfo("PIN Changed", "Software Access PIN is successfully changed!"):
                         root.focus_force()
+                        time.sleep(0.5)
+                        on_closing()
                 else:
                     root.focus_force()
             else:
@@ -597,12 +725,16 @@ def main(backWindow: ctk.CTk=None):
         root.geometry(f"590x300+{positionRight}+{positionDown-50}")
         root.title(f"Settings")
         root.resizable(0, 0)
-        root.wm_iconbitmap("./Assets/Logo.ico")
+        root.wm_iconbitmap("./Assets/Icon.ico")
         settingsOpen = root
         root.protocol("WM_DELETE_WINDOW", on_closing)
 
-        aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Management", font=("Consolas", 12))
+        aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Manager", font=("Consolas", 12))
         aboutLabel.pack(anchor="se", side="bottom", padx=10)
+        aboutLabel.bind("<Enter>", lambda e: aboutLabel.configure(cursor="hand2", font=("Consolas", 12, 'underline')))
+        aboutLabel.bind("<Leave>", lambda e: aboutLabel.configure(cursor="", font=("Consolas", 12)))
+        aboutLabel.bind("<Button-1>", lambda e: about())
+
         classTitle = ctk.CTkLabel(root, text=f"Settings", font=("Segoe UI", 30, 'bold'))
         classTitle.pack(padx=10, pady=10, anchor="nw", side="left")
 
@@ -639,14 +771,14 @@ def main(backWindow: ctk.CTk=None):
     
         CPINLabel = ctk.CTkLabel(framePIN, text="Current PIN", font=("Segoe UI", 13, "bold"))
         CPINLabel.place(x=12, y=6)
-        CpinEntry = ctk.CTkEntry(framePIN, placeholder_text="Enter Current Pin", font=("Consolas", 13), height=26, width=160)
+        CpinEntry = ctk.CTkEntry(framePIN, placeholder_text="Enter Current PIN", font=("Consolas", 13), height=26, width=160)
         CpinEntry.configure(validate="key", validatecommand=(root.register(validate_pin), "%P"))
         CpinEntry.place(x=12, y=30)
         CpinEntry.bind("<KeyRelease>", lambda e: validate_pin_length(CpinEntry, CpinEntry.get()))
         
         NPINLabel = ctk.CTkLabel(framePIN, text="New PIN", font=("Segoe UI", 13, "bold"))
         NPINLabel.place(x=12, y=60)
-        NpinEntry = ctk.CTkEntry(framePIN, placeholder_text="Enter 5 Digit New Pin", font=("Consolas", 13), height=26, width=160)
+        NpinEntry = ctk.CTkEntry(framePIN, placeholder_text="Enter 5 Digit New PIN", font=("Consolas", 13), height=26, width=160)
         NpinEntry.configure(validate="key", validatecommand=(root.register(validate_pin), "%P"))
         NpinEntry.place(x=12, y=84)
         NpinEntry.bind("<KeyRelease>", lambda e: validate_pin_length(NpinEntry, NpinEntry.get()))
@@ -705,16 +837,13 @@ def main(backWindow: ctk.CTk=None):
         def handle_save_click():
             global classes
 
-            error.configure(text=f"Saving...", font=("Segoe UI", 12, 'italic'), text_color=('gray10', '#DCE4EE'))
-            save_button.place(y=65)
             database.add_class(ClassIntEntry.get())
             ClassIntEntry.delete("0", "end")
-            error.configure(text="Saved!", font=("Segoe UI", 12, 'italic'), text_color=('gray10', '#DCE4EE'))
             for widget in scrollableFrame.winfo_children():
                 widget.destroy()
             classes = database.get_classes()
             threading.Thread(target=update_class_list, args=(scrollableFrame, classes, ), daemon=True).start()
-            addClassWin.after(1000, addClassWin.destroy)
+            on_closing()
 
 
         def validate_entry(text):
@@ -765,13 +894,13 @@ def main(backWindow: ctk.CTk=None):
         positionRight = int(addClassWin.winfo_screenwidth()/2 - 400/2)
         positionDown = int(addClassWin.winfo_screenheight()/2 - 130/2)
         addClassWin.geometry(f"400x130+{positionRight}+{positionDown-50}")
-        addClassWin.title("Rotary School Student Management")
+        addClassWin.title("Rotary School Student Manager")
         addClassWin.resizable(0, 0)
-        addClassWin.wm_iconbitmap("./Assets/Logo.ico")
+        addClassWin.wm_iconbitmap("./Assets/Icon.ico")
         addClassWin.protocol("WM_DELETE_WINDOW", on_closing)
         newClassOpen = addClassWin
 
-        aboutLabel = ctk.CTkLabel(addClassWin, text="Rotary School Student Management", font=("Consolas", 12))
+        aboutLabel = ctk.CTkLabel(addClassWin, text="Rotary School Student Manager", font=("Consolas", 12))
         aboutLabel.pack(anchor="se", side="bottom", padx=10)
 
         ClassIntLabel = ctk.CTkLabel(addClassWin, text="Enter Class Integer:", font=("Seoge UI", 16, "bold"))
@@ -816,14 +945,17 @@ def main(backWindow: ctk.CTk=None):
     positionRight = int(root.winfo_screenwidth()/2 - 650/2)
     positionDown = int(root.winfo_screenheight()/2 - 400/2)
     root.geometry(f"650x400+{positionRight}+{positionDown-50}")
-    root.title("Rotary School Student Management")
+    root.title("Rotary School Student Manager")
     root.resizable(0, 0)
-    root.wm_iconbitmap("./Assets/Logo.ico")
+    root.wm_iconbitmap("./Assets/Icon.ico")
     root.protocol("WM_DELETE_WINDOW", on_closing)
 
 
-    aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Management", font=("Consolas", 12))
+    aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Manager", font=("Consolas", 12))
     aboutLabel.pack(anchor="e", side="bottom", padx=10)        
+    aboutLabel.bind("<Enter>", lambda e: aboutLabel.configure(cursor="hand2", font=("Consolas", 12, 'underline')))
+    aboutLabel.bind("<Leave>", lambda e: aboutLabel.configure(cursor="", font=("Consolas", 12)))
+    aboutLabel.bind("<Button-1>", lambda e: about())
     settingsLabel = ctk.CTkLabel(root, text="Settings", font=("Consolas", 12))
     settingsLabel.pack(anchor="e", side="bottom", padx=10)
     settingsLabel.bind("<Enter>", lambda e: settingsLabel.configure(cursor="hand2", font=("Consolas", 12, 'underline')))
@@ -1016,7 +1148,7 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
                 sectionCombobox.set("A")
             rollEntry.insert(0, 1)
     
-    def on_closing(isback: bool):
+    def on_closing(isback: bool = False):
         if isback:
             if messagebox.askyesno("Hold On!", "By going back, any information entered here will be DELETED and IRRECOVERABLE!\nAre you sure you want to go back?"):
                 sectionWindow(root, class_str)
@@ -1032,11 +1164,14 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
     positionDown = int(root.winfo_screenheight()/2 - 470/2)
     root.geometry(f"650x470+{positionRight}+{positionDown-50}")
     root.resizable(0, 0)
-    root.wm_iconbitmap("./Assets/Logo.ico")
+    root.wm_iconbitmap("./Assets/Icon.ico")
     root.protocol("WM_DELETE_WINDOW", lambda: on_closing(False))
 
-    aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Management", font=("Consolas", 12))
+    aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Manager", font=("Consolas", 12))
     aboutLabel.pack(anchor="se", side="bottom", padx=10)
+    aboutLabel.bind("<Enter>", lambda e: aboutLabel.configure(cursor="hand2", font=("Consolas", 12, 'underline')))
+    aboutLabel.bind("<Leave>", lambda e: aboutLabel.configure(cursor="", font=("Consolas", 12)))
+    aboutLabel.bind("<Button-1>", lambda e: about())
 
     saveStudentButton = ctk.CTkButton(root, text="Save", font=("Segoe UI", 13), command=save_student)
     saveStudentButton.pack(anchor="se", pady=2, padx=10, side="right")
@@ -1125,7 +1260,7 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
     permanentAddressEntry.place(x=10, y=15)
     permanentAddressEntry.bind("<KeyRelease>", address_validator)
 
-    backButton = ctk.CTkButton(root, text="🢀", font=("Segoe UI", 13, "bold"), width=28, height=25, command=on_closing)
+    backButton = ctk.CTkButton(root, text="🢀", font=("Segoe UI", 13, "bold"), width=28, height=25, command=lambda: on_closing(True))
     backButton.place(x=2, y=2)
 
     if data != None:
@@ -1182,11 +1317,15 @@ def sectionWindow(window: ctk.CTk, class_str: str=None):
     root.geometry(f"650x400+{positionRight}+{positionDown-50}")
     root.title(f"Viewing Class {class_str}")
     root.resizable(0, 0)
-    root.wm_iconbitmap("./Assets/Logo.ico")
+    root.wm_iconbitmap("./Assets/Icon.ico")
 
 
-    aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Management", font=("Consolas", 12))
+    aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Manager", font=("Consolas", 12))
     aboutLabel.pack(anchor="se", side="bottom", padx=10)
+    aboutLabel.bind("<Enter>", lambda e: aboutLabel.configure(cursor="hand2", font=("Consolas", 12, 'underline')))
+    aboutLabel.bind("<Leave>", lambda e: aboutLabel.configure(cursor="", font=("Consolas", 12)))
+    aboutLabel.bind("<Button-1>", lambda e: about())
+
     classTitle = ctk.CTkLabel(root, text=f"Class {class_str}", font=("Segoe UI", 30, 'bold'))
     classTitle.pack(padx=10, pady=22, anchor="nw", side="left")
     backButton = ctk.CTkButton(root, text="🢀", font=("Segoe UI", 13, "bold"), width=28, height=25, command=lambda: main(root))
@@ -1302,11 +1441,15 @@ def sectionStudentWindow(window: ctk.CTk, class_str: str, section_str: str):
     root.geometry(f"650x400+{positionRight}+{positionDown-50}")
     root.title(f"Viewing Class {class_str}/{section_str.title()}")
     root.resizable(0, 0)
-    root.wm_iconbitmap("./Assets/Logo.ico")
+    root.wm_iconbitmap("./Assets/Icon.ico")
 
 
-    aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Management", font=("Consolas", 12))
+    aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Manager", font=("Consolas", 12))
     aboutLabel.pack(anchor="se", side="bottom", padx=10)
+    aboutLabel.bind("<Enter>", lambda e: aboutLabel.configure(cursor="hand2", font=("Consolas", 12, 'underline')))
+    aboutLabel.bind("<Leave>", lambda e: aboutLabel.configure(cursor="", font=("Consolas", 12)))
+    aboutLabel.bind("<Button-1>", lambda e: about())
+
     classTitle = ctk.CTkLabel(root, text=f"Class {class_str}/{section_str.title()}", font=("Segoe UI", 30, 'bold'))
     classTitle.pack(padx=10, pady=22, anchor="nw", side="left")
     backButton = ctk.CTkButton(root, text="🢀", font=("Segoe UI", 13, "bold"), width=28, height=25, command=lambda: sectionWindow(root, class_str))
@@ -1332,7 +1475,7 @@ def studentWindow(window: ctk.CTk, class_position: str):
     positionDown = int(root.winfo_screenheight()/2 - 460/2)
     root.geometry(f"650x460+{positionRight}+{positionDown-50}")
     root.resizable(0, 0)
-    root.wm_iconbitmap("./Assets/Logo.ico")
+    root.wm_iconbitmap("./Assets/Icon.ico")
 
     dataList, data = database.get_student_data(class_position)
     root.title(data['name'])
@@ -1344,8 +1487,11 @@ def studentWindow(window: ctk.CTk, class_position: str):
             messagebox.showinfo("Execution Completed!", f"{data['name'].title()} has been removed successfully!")
             root.after(1000, lambda: sectionStudentWindow(root, class_position.split('-')[0], class_position.split('-')[1]))
     
-    aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Management", font=("Consolas", 12))
+    aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Manager", font=("Consolas", 12))
     aboutLabel.pack(anchor="se", side="bottom", padx=10)
+    aboutLabel.bind("<Enter>", lambda e: aboutLabel.configure(cursor="hand2", font=("Consolas", 12, 'underline')))
+    aboutLabel.bind("<Leave>", lambda e: aboutLabel.configure(cursor="", font=("Consolas", 12)))
+    aboutLabel.bind("<Button-1>", lambda e: about())
 
     deleteStudentButton = ctk.CTkButton(root, text="Remove Student", font=("Segoe UI", 13), command=delete_student, fg_color=("#de0202", "#8B0000"), hover_color=("#8B0000", "#de0202"))
     deleteStudentButton.pack(anchor="ne", pady=2, padx=10, side="right")
