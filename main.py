@@ -36,7 +36,7 @@ def edit_data(key, value):
     with open(f"{path}/data.json", 'r') as f:
         data = json.load(f)
     data[key] = value
-    with open("./data.json", 'w') as f:
+    with open(f"{path}/data.json", 'w') as f:
         json.dump(data, f, indent=4)
 
 
@@ -48,7 +48,7 @@ class Database():
         ]
 
         credentials = Credentials.from_service_account_file(
-            './creds.json',
+            f'{path}/creds.json',
             scopes=scopes
         )
 
