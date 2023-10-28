@@ -369,7 +369,7 @@ def splash():
 
     win = ctk.CTk()
     win.wm_overrideredirect(True)
-    win.wm_iconbitmap("./Assets/Icon.ico")
+    win.wm_iconbitmap(f"{assetsPath}/Icon.ico")
     win.title("Rotary School Student Manager")
     positionRight = int(win.winfo_screenwidth()/2 - 650/2)
     positionDown = int(win.winfo_screenheight()/2 - 400/2)
@@ -554,7 +554,7 @@ def dbloadWin(window):
 
 
     win = ctk.CTk()
-    win.wm_iconbitmap("./Assets/Icon.ico")
+    win.wm_iconbitmap(f"{assetsPath}/Icon.ico")
     win.title("Rotary School Student Manager")
     positionRight = int(win.winfo_screenwidth()/2 - 650/2)
     positionDown = int(win.winfo_screenheight()/2 - 400/2)
@@ -585,7 +585,7 @@ def about():
     root.geometry(f"650x400")
     root.title("Rotary School Student Manager")
     root.resizable(0, 0)
-    root.wm_iconbitmap("./Assets/Icon.ico")
+    root.wm_iconbitmap(f"{assetsPath}/Icon.ico")
 
     aboutLabel = ctk.CTkLabel(root, text=f"About", font=("Segoe UI", 30, 'bold'))
     aboutLabel.place(x=10, y=10)
@@ -732,7 +732,7 @@ def main(backWindow: ctk.CTk=None):
         root.geometry(f"590x300+{positionRight}+{positionDown-50}")
         root.title(f"Settings")
         root.resizable(0, 0)
-        root.wm_iconbitmap("./Assets/Icon.ico")
+        root.wm_iconbitmap(f"{assetsPath}/Icon.ico")
         settingsOpen = root
         root.protocol("WM_DELETE_WINDOW", on_closing)
 
@@ -903,7 +903,7 @@ def main(backWindow: ctk.CTk=None):
         addClassWin.geometry(f"400x130+{positionRight}+{positionDown-50}")
         addClassWin.title("Rotary School Student Manager")
         addClassWin.resizable(0, 0)
-        addClassWin.wm_iconbitmap("./Assets/Icon.ico")
+        addClassWin.wm_iconbitmap(f"{assetsPath}/Icon.ico")
         addClassWin.protocol("WM_DELETE_WINDOW", on_closing)
         newClassOpen = addClassWin
 
@@ -954,7 +954,7 @@ def main(backWindow: ctk.CTk=None):
     root.geometry(f"650x400+{positionRight}+{positionDown-50}")
     root.title("Rotary School Student Manager")
     root.resizable(0, 0)
-    root.wm_iconbitmap("./Assets/Icon.ico")
+    root.wm_iconbitmap(f"{assetsPath}/Icon.ico")
     root.protocol("WM_DELETE_WINDOW", on_closing)
 
 
@@ -1171,7 +1171,7 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
     positionDown = int(root.winfo_screenheight()/2 - 470/2)
     root.geometry(f"650x470+{positionRight}+{positionDown-50}")
     root.resizable(0, 0)
-    root.wm_iconbitmap("./Assets/Icon.ico")
+    root.wm_iconbitmap(f"{assetsPath}/Icon.ico")
     root.protocol("WM_DELETE_WINDOW", lambda: on_closing(False))
 
     aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Manager", font=("Consolas", 12))
@@ -1324,7 +1324,7 @@ def sectionWindow(window: ctk.CTk, class_str: str=None):
     root.geometry(f"650x400+{positionRight}+{positionDown-50}")
     root.title(f"Viewing Class {class_str}")
     root.resizable(0, 0)
-    root.wm_iconbitmap("./Assets/Icon.ico")
+    root.wm_iconbitmap(f"{assetsPath}/Icon.ico")
 
 
     aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Manager", font=("Consolas", 12))
@@ -1448,7 +1448,7 @@ def sectionStudentWindow(window: ctk.CTk, class_str: str, section_str: str):
     root.geometry(f"650x400+{positionRight}+{positionDown-50}")
     root.title(f"Viewing Class {class_str}/{section_str.title()}")
     root.resizable(0, 0)
-    root.wm_iconbitmap("./Assets/Icon.ico")
+    root.wm_iconbitmap(f"{assetsPath}/Icon.ico")
 
 
     aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Manager", font=("Consolas", 12))
@@ -1482,7 +1482,7 @@ def studentWindow(window: ctk.CTk, class_position: str):
     positionDown = int(root.winfo_screenheight()/2 - 460/2)
     root.geometry(f"650x460+{positionRight}+{positionDown-50}")
     root.resizable(0, 0)
-    root.wm_iconbitmap("./Assets/Icon.ico")
+    root.wm_iconbitmap(f"{assetsPath}/Icon.ico")
 
     dataList, data = database.get_student_data(class_position)
     root.title(data['name'])
