@@ -18,7 +18,7 @@ import urllib.parse
 import webbrowser
 import pyasn1.error
 
-with open("data.json", "r") as f:
+with open("./data.json", "r") as f:
     data = json.load(f)
     appearence_mode = data["appearence_mode"]
     color_theme = data["color_theme"]
@@ -31,10 +31,10 @@ assetsPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "Assets")
 
 
 def edit_data(key, value):
-    with open("data.json", 'r') as f:
+    with open("./data.json", 'r') as f:
         data = json.load(f)
     data[key] = value
-    with open("data.json", 'w') as f:
+    with open("./data.json", 'w') as f:
         json.dump(data, f, indent=4)
 
 
