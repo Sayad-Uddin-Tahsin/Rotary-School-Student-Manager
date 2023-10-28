@@ -387,24 +387,13 @@ def splash():
 
     threading.Thread(target=typewrite, args=(loadingLabel, ), daemon=True).start()
     win.after(1500, lambda: dbloadWin(win))
+    win.after(150, win.focus_force)
     win.mainloop()
 
 
 def ReportErrorSequence(win: ctk.CTk, url: str):
     if messagebox.askyesno("Unexpected Error Raised!", "Rotary School Student Manager Software just hit an unexected error!\nWould you like to report it to the Developer, so that it can be solved as quickly as possible?"):
         webbrowser.open(url)
-        time.sleep(2)
-        win.bell()
-        if messagebox.askyesno("Did you get redirected?", "Did you get redirected to a Mail Compose Page? Please wait a while before answering it!"):
-            messagebox.showinfo("Error Report", "Now press the 'Send' button to report the bug!\nOnce you sent, the developer will get you in touch as soon as possible! Sorry for the inconvenience!")
-            win.destroy()
-        else:
-            win.clipboard_append(url)
-            messagebox.showinfo("Report Error", "I'm sorry to hear that! I just copied the report URL for you! Please browse that in your preferred Browser and send the mail!\nSorry for the inconvenience caused by the error!")
-            win.destroy()
-    else:
-        messagebox.showinfo("Report Error", "You've cancelled the Error Reporting Sequence!\nYou may try restarting the software. If it doesn't fix the error, please report it next time!")
-        win.destroy()
 
 def dbloadWin(window):
     window.destroy()
