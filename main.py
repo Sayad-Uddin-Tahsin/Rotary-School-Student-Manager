@@ -603,7 +603,7 @@ This is Sayad Uddin Tahsin, a student of class 8 (2023) of Rotary School, Khulna
     mailLabel.place(x=215, y=165)
     mailLabel.bind("<Enter>", lambda e: mailLabel.configure(cursor="hand2"))
     mailLabel.bind("<Leave>", lambda e: mailLabel.configure(cursor=""))
-    mailLabel.bind("<Button-1>", lambda e: webbrowser.open("mailto:tahsin.ict@outlook.com?subject=Query for Rotary School Student Manager&body=\n\n\nRedirected from Rotary School Student Manager Software"))
+    mailLabel.bind("<Button-1>", lambda e: webbrowser.open("mailto:tahsin.ict@outlook.com?subject=Query about Rotary School Student Manager&body=\n\n\nRedirected from Rotary School Student Manager Software"))
 
     versionLabel = ctk.CTkLabel(root, text=f"Rotary School Student Manager v1.0 is running on your computer.", font=("Seoge UI", 15, "bold"))
     versionLabel.place(x=10, y=360)
