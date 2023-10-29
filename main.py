@@ -1147,7 +1147,7 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
     def on_closing(isback: bool = False):
         if isback:
             if messagebox.askyesno("Hold On!", "By going back, any information entered here will be DELETED and IRRECOVERABLE!\nAre you sure you want to go back?"):
-                sectionStudentWindow(root, class_str, data[1].split('-')[1])
+                studentWindow(root, data[1])
         else:
             if messagebox.askyesno("Hold On!", "By closing, any information entered here will be DELETED and IRRECOVERABLE!\nAre you sure you want to proceed?"):
                 root.destroy()
