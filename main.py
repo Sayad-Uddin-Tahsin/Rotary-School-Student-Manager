@@ -582,11 +582,11 @@ def about():
     descriptionLabel.place(x=10, y=60)
     sourceLabel = ctk.CTkLabel(root, text=f"Software Source Code is available at: ", font=("Seoge UI", 12, "bold"))
     sourceLabel.place(x=10, y=100)
-    sourceHyperLabel = ctk.CTkLabel(root, text="GitHub: Sayad-Uddin-Tahsin/Rotary-School-Student-Management", font=("Seoge UI", 12, "underline"), text_color="#0078D7")
+    sourceHyperLabel = ctk.CTkLabel(root, text="GitHub: Sayad-Uddin-Tahsin/Rotary-School-Student-Manager", font=("Seoge UI", 12, "underline"), text_color="#0078D7")
     sourceHyperLabel.place(x=225, y=100)
     sourceHyperLabel.bind("<Enter>", lambda e: sourceHyperLabel.configure(cursor="hand2"))
     sourceHyperLabel.bind("<Leave>", lambda e: sourceHyperLabel.configure(cursor=""))
-    sourceHyperLabel.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/Sayad-Uddin-Tahsin/Rotary-School-Student-Management"))
+    sourceHyperLabel.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/Sayad-Uddin-Tahsin/Rotary-School-Student-Manager"))
 
     devFrame = ctk.CTkFrame(root, width=450, height=200, corner_radius=6, border_width=1, fg_color="transparent")
     devFrame.place(x=100, y=140)
