@@ -12,11 +12,10 @@ from tkinter import messagebox
 import json
 import darkdetect
 import gspread
-from google.oauth2.service_account import Credentials
 import sys
-import urllib.parse
 import webbrowser
 import pyasn1.error
+from urllib.request import urlopen
 
 path = os.path.dirname(os.path.realpath(__file__))
 
@@ -30,7 +29,7 @@ ctk.set_default_color_theme(color_theme)
 
 database = None
 assetsPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "Assets")
-
+current_version = "0.5"
 
 def edit_data(key, value):
     with open(f"{path}/data.json", 'r') as f:
@@ -40,6 +39,42 @@ def edit_data(key, value):
         json.dump(data, f, indent=4)
 
 
+def get_creds() -> dict:
+    with open("creds.txt", 'r') as f:
+        content = f.read()
+    creds = ""
+    for c in content:
+        creds += chr(ord(c) - 2)
+    return json.loads(creds)
+
+def create_spreadsheet() -> None:
+    scopes = [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive'
+    ]
+
+    gc = gspread.service_account_from_dict(
+        get_creds(),
+        scopes=scopes
+    )
+    spreadsheet = gc.create("Rotary School Student Data")
+    spreadsheet.share('mr.pluto012@gmail.com', perm_type='user', role='writer')
+    sheet = spreadsheet.sheet1
+    sheet.resize(380000)
+
+def create_worksheet() -> None:
+    scopes = [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive'
+    ]
+
+    gc = gspread.service_account_from_dict(
+        get_creds(),
+        scopes=scopes
+    )
+    spreadsheet = gc.open("Rotary School Student Data")
+    spreadsheet.add_worksheet("sheet1", 380000)
+
 class Database():
     def __init__(self) -> None:
         scopes = [
@@ -47,14 +82,15 @@ class Database():
             'https://www.googleapis.com/auth/drive'
         ]
 
-        credentials = Credentials.from_service_account_file(
-            f'{path}/creds.json',
+        self.gc = gspread.service_account_from_dict(
+            get_creds(),
             scopes=scopes
         )
 
-        gc = gspread.authorize(credentials)
+        self.spreadsheet = self.gc.open("Rotary School Student Data")
+        self.sheet = self.spreadsheet.sheet1
+        self.spreadsheet.share('mr.pluto012@gmail.com', perm_type='user', role='writer')
 
-        self.sheet = gc.open("Rotary School Student Data").sheet1
 
     def get_all(self) -> list:
         return self.sheet.get()
@@ -394,6 +430,7 @@ def splash():
 def ReportErrorSequence(win: ctk.CTk, url: str):
     if messagebox.askyesno("Unexpected Error Raised!", "Rotary School Student Manager Software just hit an unexected error!\nWould you like to report it to the Developer, so that it can be solved as quickly as possible?"):
         webbrowser.open(url)
+    win.destroy()
 
 def dbloadWin(window):
     window.destroy()
@@ -508,9 +545,12 @@ def dbloadWin(window):
             loadingLabel.configure(text=f"Loading Failed, No Internet Connection! Retrying in 5")
         except google.auth.exceptions.RefreshError:
             loadingLabel.configure(text=f"Loading Failed, Computer time is incorrect! Retrying in 5")
-        except (gspread.exceptions.WorksheetNotFound, gspread.exceptions.SpreadsheetNotFound):
-            loadingLabel.configure(text=f"Database not found!")
-            istypewrite = False
+        except gspread.exceptions.SpreadsheetNotFound:
+            create_spreadsheet()
+            load_database()
+        except gspread.exceptions.WorksheetNotFound:
+            create_worksheet()
+            load_database()
         except gspread.exceptions.GSpreadException as e:
             istypewrite = False
             win.bell()
@@ -605,7 +645,7 @@ This is Sayad Uddin Tahsin, a student of class 8 (2023) of Rotary School, Khulna
     mailLabel.bind("<Leave>", lambda e: mailLabel.configure(cursor=""))
     mailLabel.bind("<Button-1>", lambda e: webbrowser.open("mailto:tahsin.ict@outlook.com?subject=Query about Rotary School Student Manager&body=\n\n\nRedirected from Rotary School Student Manager Software"))
 
-    versionLabel = ctk.CTkLabel(root, text=f"Rotary School Student Manager v1.0 is running on your computer.", font=("Seoge UI", 15, "bold"))
+    versionLabel = ctk.CTkLabel(root, text=f"Rotary School Student Manager v{current_version} is running on your computer.", font=("Seoge UI", 15, "bold"))
     versionLabel.place(x=10, y=360)
     root.after(100, root.lift)
     root.mainloop()
