@@ -651,7 +651,7 @@ def main(backWindow: ctk.CTk=None):
         pinok = False
         cpinok = False
         def validate_pin(text):
-            if text == "" or text.isdigit():
+            if text in ["", "Enter Current PIN", "Enter 5 Digit New PIN", "New 5 Digit PIN Again"] or text.isdigit():
                 if len(text) > 5:
                     return False
                 return True
@@ -1014,13 +1014,18 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
             idEntry.configure(border_color=("#979DA2", "#565B5E"))
             studentIDok = True
     
-    def rollEntryValidator(text):
+    def rollEntryValidator(text, current: bool = False):
         global rollok
-
+        if text == "":
+            return
+    
         rolls = database.get_rolls(class_str, str(sectionCombobox.get()).lower())
         if int(text) in rolls:
-            rollEntry.configure(border_color=("#FF0000", "#8B0000"))
-            rollok = False
+            if not current:
+                rollEntry.configure(border_color=("#FF0000", "#8B0000"))
+                rollok = False
+            else:
+                rollok = True
         else:
             rollEntry.configure(border_color=("#979DA2", "#565B5E"))
             rollok = True
@@ -1081,7 +1086,7 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
     def update_student(old_data: list):
         new_data = [
             idEntry.get(), 
-            data[1], 
+            f"{class_str}-{sectionCombobox.get().lower()}-{rollEntry.get()}",
             nameEntry.get(), 
             dobEntry.get(), 
             fnamevalueEntry.get(), 
@@ -1092,8 +1097,23 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
             permanentAddressEntry.get("0.0", "end").strip()
         ]
         if new_data != old_data:
-            database.update_student(new_data)
-        studentWindow(root, data[1])
+            if new_data[1] != old_data[1]:
+                database.delete_student(old_data[1])
+                database.add_student(
+                    idEntry.get(), 
+                    f"{class_str}-{sectionCombobox.get().lower()}-{rollEntry.get()}", 
+                    nameEntry.get(), 
+                    dobEntry.get(), 
+                    fnamevalueEntry.get(), 
+                    fcontactvalueEntry.get(), 
+                    mnamevalueEntry.get(),
+                    mcontactvalueEntry.get(),
+                    presentAddressEntry.get("0.0", "end").strip(),
+                    permanentAddressEntry.get("0.0", "end").strip()
+                )
+            else:
+                database.update_student(new_data)
+        studentWindow(root, new_data[1])
 
     def fillAll():
         idEntry.unbind("<FocusOut>")
@@ -1104,10 +1124,9 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
         nameEntry.insert(0, data[2]) 
         classLabel = ctk.CTkLabel(root, text=f"Class: {class_str}", font=("Consolas", 14))
         classLabel.place(x=10, y=100)    
-        sectionLabel.configure(text=f"Section: {data[1].split('-')[1].title()}")
-        sectionCombobox.place_forget()
-        rollLabel.configure(text=f"Roll: {data[1].split('-')[2]}")
-        rollEntry.place_forget()
+        sectionCombobox.set(data[1].split('-')[1].title())
+        rollEntry.delete("0", "end")
+        rollEntry.insert("0", data[1].split('-')[2])
         fnamevalueEntry.insert(0, data[4])
         fcontactvalueEntry.insert(0, data[5])
         mnamevalueEntry.insert(0, data[6])
@@ -1117,20 +1136,19 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
         saveStudentButton.configure(text="Update", command=lambda: update_student(data))
 
     def save_student():
-        if messagebox.askyesno("Hold on! ", f"Please give a cross check as you will not able to edit the Section, Roll later!\nDo you want to proceed?"):
-            database.add_student(
-                idEntry.get(), 
-                f"{class_str}-{sectionCombobox.get().lower()}-{rollEntry.get()}", 
-                nameEntry.get(), 
-                dobEntry.get(), 
-                fnamevalueEntry.get(), 
-                fcontactvalueEntry.get(), 
-                mnamevalueEntry.get(),
-                mcontactvalueEntry.get(),
-                presentAddressEntry.get("0.0", "end").strip(),
-                permanentAddressEntry.get("0.0", "end").strip()
-            )
-            sectionWindow(root, class_str)
+        database.add_student(
+            idEntry.get(), 
+            f"{class_str}-{sectionCombobox.get().lower()}-{rollEntry.get()}", 
+            nameEntry.get(), 
+            dobEntry.get(), 
+            fnamevalueEntry.get(), 
+            fcontactvalueEntry.get(), 
+            mnamevalueEntry.get(),
+            mcontactvalueEntry.get(),
+            presentAddressEntry.get("0.0", "end").strip(),
+            permanentAddressEntry.get("0.0", "end").strip()
+        )
+        sectionWindow(root, class_str)
 
     def sectionComboboxCallback(choice, first: bool = False):
         rollEntry.configure(state="disabled")
@@ -1200,7 +1218,7 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
     rollLabel.place(x=418, y=100)
     rollEntry = ctk.CTkEntry(root, width=60, height=18, border_width=1, state="disabled", font=("Consolas", 13))
     rollEntry.place(x=468, y=103)
-    rollEntry.bind("<KeyRelease>", lambda e: rollEntryValidator(rollEntry.get()))
+    rollEntry.bind("<KeyRelease>", lambda e: rollEntryValidator(rollEntry.get(), False if data == None else True))
     sectionComboboxCallback(sections[0] if sections else [], True)
 
 
