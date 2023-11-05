@@ -58,7 +58,6 @@ def create_spreadsheet() -> None:
         scopes=scopes
     )
     spreadsheet = gc.create("Rotary School Student Data")
-    spreadsheet.share('mr.pluto012@gmail.com', perm_type='user', role='writer')
     sheet = spreadsheet.sheet1
     sheet.resize(380000)
 
@@ -89,7 +88,6 @@ class Database():
 
         self.spreadsheet = self.gc.open("Rotary School Student Data")
         self.sheet = self.spreadsheet.sheet1
-        self.spreadsheet.share('mr.pluto012@gmail.com', perm_type='user', role='writer')
 
 
     def get_all(self) -> list:
