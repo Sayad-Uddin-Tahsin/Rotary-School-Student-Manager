@@ -15,7 +15,11 @@ import gspread
 import sys
 import webbrowser
 import pyasn1.error
-from urllib.request import urlopen
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import smtplib
+from tkcalendar import Calendar
+from datetime import datetime
 
 path = os.path.dirname(os.path.realpath(__file__))
 
@@ -60,6 +64,9 @@ def create_spreadsheet() -> None:
     spreadsheet = gc.create("Rotary School Student Data")
     sheet = spreadsheet.sheet1
     sheet.resize(380000)
+    sheet.insert_row(["$Class$", "\"\""], 1)
+    sheet.insert_row(["$Pin$", "6789:"], 2)
+    sheet.insert_row(["Student ID", "Class-Roll", "Name", "Date of Birth", "Father's Name", "Father's Phone", "Mother's Name", "Mother's Phone", "Present Address", "Permanent Address"], 3)
 
 def create_worksheet() -> None:
     scopes = [
@@ -73,6 +80,10 @@ def create_worksheet() -> None:
     )
     spreadsheet = gc.open("Rotary School Student Data")
     spreadsheet.add_worksheet("sheet1", 380000)
+    sheet = spreadsheet.sheet1
+    sheet.insert_row(["$Class$", "\"\""], 1)
+    sheet.insert_row(["$Pin$", "6789:"], 2)
+    sheet.insert_row(["Student ID", "Class-Roll", "Name", "Date of Birth", "Father's Name", "Father's Phone", "Mother's Name", "Mother's Phone", "Present Address", "Permanent Address"], 3)
 
 class Database():
     def __init__(self) -> None:
@@ -205,7 +216,7 @@ class Database():
         except requests.exceptions.ConnectionError:
             if messagebox.showerror("Connection Lost!", "Connection was lost! Please check your Internet Connection and try again!"):
                 exit(0)
-        all_data = all_data[2:]
+        all_data = all_data[3:]
         all_data = [i for i in all_data if i]
         all_class_students = []
         for data in all_data:
@@ -218,6 +229,23 @@ class Database():
             student_data['name'] = student[2]
             all_student_data[str(student[1]).split("-")[2]] = student_data
         return all_student_data
+
+    def get_all_student_data(self) -> dict:
+        try:
+            all_data = self.get_all()
+        except requests.exceptions.ConnectionError:
+            if messagebox.showerror("Connection Lost!", "Connection was lost! Please check your Internet Connection and try again!"):
+                exit(0)
+        all_data = all_data[3:]
+        all_data = [i for i in all_data if i]
+        all_student_data = {}
+        for student in all_data:
+            student_data = {}
+            student_data['studentID'] = student[0]
+            student_data['name'] = student[2]
+            student_data["position"] = student[1]
+            all_student_data[str(student[1]).split("-")[2]] = student_data
+        return all_student_data
     
     def get_student_data(self, position: str) -> dict:
         try:
@@ -226,6 +254,8 @@ class Database():
             if messagebox.showerror("Connection Lost!", "Connection was lost! Please check your Internet Connection and try again!"):
                 exit(0)
         data = self.sheet.row_values(f.row)
+        if len(data) < 10:
+            data.extend([''] * (10 - len(data)))
         student_data = {}
         student_data['studentID'] = data[0]
         student_data['class'] = str(data[1]).split("-")[0]
@@ -349,7 +379,6 @@ class Database():
                     else:
                         next_section = sections[sections.index(gsection)+1]
                         first_roll = self.get_rolls(gclass, next_section)[0]
-                        print(gclass, next_section, first_roll)
                         _find = self.sheet.find(f"{gclass}-{next_section}-{first_roll}")
                         self.sheet.insert_row(data, _find.row)
             else:
@@ -425,9 +454,114 @@ def splash():
     win.mainloop()
 
 
-def ReportErrorSequence(win: ctk.CTk, url: str):
+def ReportErrorSequence(win: ctk.CTk, subject: str, type: str, filename: str, linenumber: str, message: str):
     if messagebox.askyesno("Unexpected Error Raised!", "Rotary School Student Manager Software just hit an unexected error!\nWould you like to report it to the Developer, so that it can be solved as quickly as possible?"):
-        webbrowser.open(url)
+        maildialog = ctk.CTkInputDialog(text="Enter your Email Address:", title="Error Report Sequence")
+        replymail = maildialog.get_input()
+        if replymail == "":
+            win.destroy()
+            return
+        email_data = MIMEMultipart('alternative')
+        email_data['From'] = "mr.pluto012@gmail.com"
+        email_data['To'] = "tahsin.ict@outlook.com"
+        email_data["Subject"] = subject
+        html_code = f"""\
+        <html><head>
+            
+
+        </head>
+        <body>
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px" align="center">
+        <tbody>
+        <tr>
+        <td role="modules-container" style="padding:0px 0px 0px 0px;color:#353740;text-align:left" bgcolor="#FFFFFF" width="100%" align="left">
+        <table class="m_6462241684133058065preheader" role="module" border="0" cellpadding="0" cellspacing="0" width="100%" style="display:none!important;opacity:0;color:transparent;height:0;width:0">
+            <tbody>
+            <tr>
+                <td role="module-content">
+                <p>Error on Rotary School Student Manager Software!</p>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+        <center>
+            <img alt="Logo" src="https://github.com/Sayad-Uddin-Tahsin/Rotary-School-Student-Manager/blob/main/Assets/Logo%20Dark.png?raw=true" height="100" width="100" style="margin: 0; padding: 0;">
+            <p style="font-family:'Arial Black'; font-size: 20px;">Rotary School Student Manager</p>
+
+        </center>
+
+        <table role="module" border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed">
+            <tbody>
+            <tr>
+                <td style="padding:0px 24px 0px 24px" role="module-content" height="100%" valign="top" bgcolor="">
+                <table border="0" cellpadding="0" cellspacing="0" align="center" width="100%" height="1px" style="line-height:0px;font-size:0px">
+                    <tbody>
+                    <tr>
+                        <td style="padding:0px 0px 0px 0px" bgcolor="#ECECF1"></td>
+                    </tr>
+                    </tbody>
+                </table>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+        <table role="module" border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed">
+            <tbody>
+            <tr>
+                <td style="padding:10px 24px 14px 24px;line-height:24px;text-align:inherit" height="100%" valign="top" bgcolor="" role="module-content">
+                <div>
+                    <div style="font-family:inherit;text-align:inherit">
+                    <span style="font-size:16px"><p><b>Error Type:</b> <code>{type}</code></p><p><b>Filename:</b> <code>{filename}</code></p><p><b>Line Number:</b> <code>{linenumber}</code></p><p><b>Error Message</b><br><code>{message}</code></p></span>
+                    </div>
+                </div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+        <table role="module" border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed">
+            <tbody>
+            <tr>
+                <td bgcolor="" valign="top" height="100%" role="module-content" style="padding:0px 24px 15px 24px">
+                <table border="0" cellpadding="0" cellspacing="0" align="center" width="100%" height="1px" style="line-height:1px;font-size:1px">
+                    <tbody>
+                    <tr>
+                        <td style="padding:0px 0px 1px 0px" bgcolor="#ECECF1"></td>
+                    </tr>
+                    </tbody>
+                </table>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+        <div role="module" style="color:#8e8ea0;font-size:12px;line-height:20px;padding:0px 16px 0px 16px;text-align:center; font-family:'Courier New'">
+            <div>
+            <p style="font-family:inherit;font-size:12px;line-height:20px">From Rotary School Student Management Software</p>
+            
+            </div>
+        </div>
+        <table role="module" border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed">
+            <tbody>
+            <tr>
+                <td style="padding:0px 0px 32px 0px" role="module-content" bgcolor=""></td>
+            </tr>
+            </tbody>
+        </table>
+        </td>
+        </tr>
+        </tbody>
+        </table>
+
+        </body></html>
+        """
+        html = MIMEText(html_code, 'html')
+        email_data.attach(html)
+        email_data.add_header('reply-to', replymail)
+        mail = smtplib.SMTP('smtp.gmail.com', 587)
+        mail.ehlo()
+        mail.starttls()
+        mail.login('mr.pluto012@gmail.com', 'aebhdtqazepfvtqn')
+        mail.sendmail(email_data['From'], "tahsin.ict@outlook.com", email_data.as_string())
+        mail.quit()
     win.destroy()
 
 def dbloadWin(window):
@@ -541,7 +675,7 @@ def dbloadWin(window):
             done = True
         except (google.auth.exceptions.TransportError, requests.exceptions.ConnectionError, urllib3.exceptions.MaxRetryError, urllib3.exceptions.NewConnectionError) as e:
             loadingLabel.configure(text=f"Loading Failed, No Internet Connection! Retrying in 5")
-        except google.auth.exceptions.RefreshError:
+        except google.auth.exceptions.RefreshError as e:
             loadingLabel.configure(text=f"Loading Failed, Computer time is incorrect! Retrying in 5")
         except gspread.exceptions.SpreadsheetNotFound:
             create_spreadsheet()
@@ -558,8 +692,7 @@ def dbloadWin(window):
             )[1]
             e_message = str(e)
             e_line_number = e_traceback.tb_lineno
-            url = f"mailto:tahsin.ict@outlook.com?subject=Unexpected Error on Rotary School Student Manager&body=\nError Information:\n```\nType: {e_type}\nFile: {e_filename}\nLine: {e_line_number}\nMessage: {e_message}\n```\n\nRedirected from Rotary School Student Manager Software"
-            ReportErrorSequence(win, url)
+            ReportErrorSequence(win, "Unexpected Error on Rotary School Student Manager", e_type, e_filename, e_line_number, e_message)
         except pyasn1.error.PyAsn1Error:
             loadingLabel.configure(text=f"Database Credentials Error!")
             if messagebox.askyesno("Credentials Error", "Credentials error usually raised when the  Database credentials are not correct! Please contact with the Developer!\nDo you want to send him Mail?"):
@@ -574,8 +707,7 @@ def dbloadWin(window):
             )[1]
             e_message = str(e)
             e_line_number = e_traceback.tb_lineno
-            url = f"mailto:tahsin.ict@outlook.com?subject=Unexpected Error on Rotary School Student Manager&body=\nError Information:\n```\nType: {e_type}\nFile: {e_filename}\nLine: {e_line_number}\nMessage: {e_message}\n```\n\nRedirected from Rotary School Student Manager Software"
-            ReportErrorSequence(win, url)
+            ReportErrorSequence(win, "Unexpected Error on Rotary School Student Manager", e_type, e_filename, e_line_number, e_message)
         if done:
             move_to_pin()
 
@@ -586,6 +718,7 @@ def dbloadWin(window):
     positionRight = int(win.winfo_screenwidth()/2 - 650/2)
     positionDown = int(win.winfo_screenheight()/2 - 400/2)
     win.geometry(f"650x400+{positionRight}+{positionDown-50}")
+    win.resizable(0, 0)
 
     aboutLabel = ctk.CTkLabel(win, text="Developer", font=("Consolas", 12))
     aboutLabel.pack(anchor="e", side="bottom", padx=10)        
@@ -637,7 +770,7 @@ This is Sayad Uddin Tahsin, a student of class 8 (2023) of Rotary School, Khulna
 """
     ctk.CTkLabel(devFrame, text=text, font=("Segoe UI", 13), wraplength=450, justify="left").place(x=10, y=60)
     ctk.CTkLabel(devFrame, text="For any query, please reach me at:", font=("Segoe UI", 13)).place(x=10, y=165)
-    mailLabel = ctk.CTkLabel(devFrame, text="Email", font=("Segoe UI", 13, 'underline'), text_color="#0078D7")
+    mailLabel = ctk.CTkLabel(devFrame, text="Email: tahsin.ict@outlook.com", font=("Segoe UI", 13, 'underline'), text_color="#0078D7")
     mailLabel.place(x=215, y=165)
     mailLabel.bind("<Enter>", lambda e: mailLabel.configure(cursor="hand2"))
     mailLabel.bind("<Leave>", lambda e: mailLabel.configure(cursor=""))
@@ -646,6 +779,106 @@ This is Sayad Uddin Tahsin, a student of class 8 (2023) of Rotary School, Khulna
     versionLabel = ctk.CTkLabel(root, text=f"Rotary School Student Manager v{current_version} is running on your computer.", font=("Seoge UI", 15, "bold"))
     versionLabel.place(x=10, y=360)
     root.after(100, root.lift)
+    root.mainloop()
+
+def searcher(win: ctk.CTk, text: str = None):
+    global all_student_data
+
+    win.destroy()
+
+    root = ctk.CTk()
+    positionRight = int(root.winfo_screenwidth()/2 - 650/2)
+    positionDown = int(root.winfo_screenheight()/2 - 400/2)
+    root.geometry(f"650x400+{positionRight}+{positionDown-50}")
+    root.title("Rotary School Student Manager")
+    root.resizable(0, 0)
+    root.wm_iconbitmap(f"{assetsPath}/Icon.ico")
+
+    aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Manager", font=("Consolas", 12))
+    aboutLabel.pack(anchor="se", side="bottom", padx=10)
+    aboutLabel.bind("<Enter>", lambda e: aboutLabel.configure(cursor="hand2", font=("Consolas", 12, 'underline')))
+    aboutLabel.bind("<Leave>", lambda e: aboutLabel.configure(cursor="", font=("Consolas", 12)))
+    aboutLabel.bind("<Button-1>", lambda e: about())
+
+    Title = ctk.CTkLabel(root, text=f"Find Student", font=("Segoe UI", 30, 'bold'))
+    Title.pack(padx=10, pady=22, anchor="nw", side="left")
+
+    def search():
+        global all_student_data
+
+        text = searchEntry.get()
+        matched = []
+        if searchFilter.get() == "Name":
+            for d in all_student_data:
+                if text.lower() in all_student_data[d]['name'].lower():
+                    matched.append(d)
+        elif searchFilter.get() == "Student ID":
+            for d in all_student_data:
+                if text.lower() in all_student_data[d]['studentID'].lower():
+                    matched.append(d)
+        for widget in scrollableFrame.winfo_children():
+            widget.destroy()
+        if matched:
+            for roll in matched:
+                try:
+                    student_data = all_student_data[roll]
+                    frame = ctk.CTkFrame(scrollableFrame, border_width=1, height=60)
+                    ctk.CTkLabel(frame, text=f"Student ID: {student_data['studentID']}", font=("Consolas", 12)).place(x=10, y=2)
+                    ctk.CTkLabel(frame, text=student_data['name'].title(), font=("Segoe UI", 22, "bold")).place(x=10, y=25)
+                    frame.pack_propagate(0)
+                    rollLabel = ctk.CTkLabel(frame, text=f"Class: {student_data['position'].split('-')[0]}  Roll: {roll}", font=("Consolas", 12))
+                    rollLabel.pack(anchor="ne", padx=10, pady=2)
+                    frame.pack(padx=10, pady=2, fill='x', side="top")
+                    
+                    def enter(event):
+                        event.widget.configure(cursor="hand2")
+
+                    def leave(event):
+                        event.widget.configure(cursor="")
+
+                    def on_frame_click(position_str):
+                        studentWindow(root, position_str)
+
+                    for widget in frame.winfo_children():
+                        widget.bind("<Enter>", enter)
+                        widget.bind("<Leave>", leave)
+                        widget.bind("<Button-1>", lambda e, label=student_data['position']: on_frame_click(label))
+
+                    frame.bind("<Enter>", enter)
+                    frame.bind("<Leave>", leave)
+                    frame.bind("<Button-1>", lambda e, label=student_data['position']: on_frame_click(label))
+                except _tkinter.TclError:
+                    pass
+            scrollableFrame.after(10, scrollableFrame._parent_canvas.yview_moveto, 0.0)
+
+        else:
+            ctk.CTkLabel(scrollableFrame, text="No match result found!", font=("Segoe UI", 13, "bold")).pack(anchor="center")
+            scrollableFrame.after(10, scrollableFrame._parent_canvas.yview_moveto, 0.0)
+
+    scrollableFrame = ctk.CTkScrollableFrame(root, height=250, width=610, label_text=f"Matching Results", label_font=("Segoe UI", 16, "bold"))
+    scrollableFrame.place(x=10, y=70)
+    searchEntry = ctk.CTkEntry(root, placeholder_text="Type Name to be searched", width=175, height=26)
+    searchEntry.place(x=325, y=40)
+    def test():
+        if searchFilter.get() == "Student ID":
+            searchEntry.place(x=300, y=40)
+            searchFilter.place(x=480, y=40)
+        else:
+            searchEntry.place(x=325, y=40)
+            searchFilter.place(x=505, y=40)
+    searchFilter = ctk.CTkOptionMenu(root, values=["Name", "Student ID"], width=60, height=26, command=lambda e: test())
+    searchFilter.place(x=505, y=40)
+    searchFilter.set("Name")
+    searchButton = ctk.CTkButton(root, text="Search", font=("Segoe UI", 13), width=60, height=26, command=search)
+    searchButton.place(x=580, y=40)
+    searchEntry.bind('<Return>', lambda e: search())
+    all_student_data = database.get_all_student_data()
+    backButton = ctk.CTkButton(root, text="🢀", font=("Segoe UI", 13, "bold"), width=28, height=25, command=lambda: main(root))
+    backButton.place(x=2, y=2)
+    if text != None:
+        searchEntry.delete("0", "end")
+        searchEntry.insert("0", text)
+        search()
     root.mainloop()
 
 def main(backWindow: ctk.CTk=None):
@@ -831,7 +1064,7 @@ def main(backWindow: ctk.CTk=None):
         
         root.mainloop()
 
-    def update_class_list(scrollableFrame: ctk.CTkScrollableFrame, classes: list):
+    def update_class_list(scrollableFrame: ctk.CTkScrollableFrame, classes: list, boot: bool = False):
         if not classes:
             ctk.CTkLabel(scrollableFrame, text="No class was assigned!", font=("Segoe UI", 13, "bold")).pack(anchor="center")
         else:
@@ -864,7 +1097,8 @@ def main(backWindow: ctk.CTk=None):
 
                 except _tkinter.TclError:
                     pass
-            threading.Thread(target=build_info_frame, args=(infoFrame, ), daemon=True).start()
+            if not boot:
+                threading.Thread(target=build_info_frame, args=(infoFrame, ), daemon=True).start()
 
     def add_class():
         global classes, newClassOpen
@@ -951,13 +1185,16 @@ def main(backWindow: ctk.CTk=None):
         addClassWin.mainloop()
 
     def build_info_frame(infoFrame: ctk.CTkFrame):
-        if len(infoFrame.winfo_children()) != 0:
-            for widget in infoFrame.winfo_children():
-                widget.destroy()
-        ctk.CTkLabel(infoFrame, text="Information", fg_color=('gray78', 'gray23'), font=("Segoe UI", 16, 'bold'), corner_radius=infoFrame.cget("corner_radius")).pack(padx=6, pady=6, fill="x")
-        ctk.CTkLabel(infoFrame, text=f"Total Students: {database.get_all_students_amount()}", font=("Consolas", 13)).place(x=6, y=40)
-        ctk.CTkLabel(infoFrame, text=f"Class Assigned: {len(classes)}", font=("Consolas", 13)).place(x=6, y=60)
-
+        try:
+            if len(infoFrame.winfo_children()) != 0:
+                for widget in infoFrame.winfo_children():
+                    widget.destroy()
+            ctk.CTkLabel(infoFrame, text="Information", fg_color=('gray78', 'gray23'), font=("Segoe UI", 16, 'bold'), corner_radius=infoFrame.cget("corner_radius")).pack(padx=6, pady=6, fill="x")
+            ctk.CTkLabel(infoFrame, text=f"Total Students: {database.get_all_students_amount()}", font=("Consolas", 13)).place(x=6, y=40)
+            ctk.CTkLabel(infoFrame, text=f"Class Assigned: {len(classes)}", font=("Consolas", 13)).place(x=6, y=60)
+        except:
+            pass
+    
     def on_closing():
         root.quit()
         for widget in root.winfo_children():
@@ -1009,21 +1246,64 @@ def main(backWindow: ctk.CTk=None):
     addClassButton = ctk.CTkButton(root, text="Assign Class", corner_radius=6, font=("Segoe UI", 12), width=80)
     addClassButton.place(x=300, y=100)
     addClassButton.bind("<Button-1>", lambda e: add_class() if newClassOpen is None else [newClassOpen.focus_force(), newClassOpen.deiconify()])
-    threading.Thread(target=update_class_list, args=(scrollableFrame, classes, ), daemon=True).start()
+    threading.Thread(target=update_class_list, args=(scrollableFrame, classes), daemon=True).start()
 
     infoFrame = ctk.CTkFrame(root, width=230, corner_radius=6)
     infoFrame.place(x=410, y=130)
     infoFrame.pack_propagate(0)
     threading.Thread(target=build_info_frame, args=(infoFrame, ), daemon=True).start()
 
+    searchEntry = ctk.CTkEntry(root, width=195, placeholder_text="Search by Name")
+    searchEntry.place(x=410, y=100)
+    searchButton = ctk.CTkButton(root, width=searchEntry.cget("height"), command=lambda: searcher(root, searchEntry.get()) if searchEntry.get() != "" else None, text="🔍", height=searchEntry.cget("height"))
+    searchButton.place(x=610, y=100)
+    searchEntry.bind('<Return>', lambda e: searcher(root, searchEntry.get()) if searchEntry.get() != "" else None)
     root.mainloop()
 
 def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
-    global studentIDok, rollok, dobok
+    global studentIDok, rollok, dobok, datepickerwin, root, dobEntry
     
     studentIDok = False
     rollok = False
     dobok = False
+    datepickerwin = None
+
+    def datepicker(year, month, day):
+        global datepickerwin, root, dobEntry
+        
+        win = ctk.CTkToplevel()
+        win.geometry("400x250")
+        win.title("Date Picker")
+        win.resizable(0, 0)
+        win.wm_iconbitmap(f"{assetsPath}/Icon.ico")
+        datepickerwin = win
+        def on_closing():
+            global datepickerwin
+
+            root.focus_force()
+            datepickerwin = None
+            win.destroy()
+        
+        win.protocol("WM_DELETE_WINDOW", on_closing)
+        
+        cal = Calendar(win, selectmode = 'day',
+                    year = year, month = month,
+                    day = day)
+        
+        cal.pack(pady = 10, padx=10)
+        
+        def set_date():
+            DOBFormatter(f"{cal._sel_date.day}/{cal._sel_date.month}/{cal._sel_date.year}")
+            dobEntry.unbind("<FocusIn>")
+            dobEntry.bind("<FocusIn>", lambda e, date = dobEntry.get(): datepicker(int(date.split("/")[2]), int(date.split("/")[1]), int(date.split("/")[0])) if datepickerwin is None else [datepickerwin.focus_force(), datepickerwin.deiconify()])
+            on_closing()
+
+        ctk.CTkButton(win, text = "OK",
+            command = set_date).pack(anchor="e", pady = 10, side="bottom", padx=10)
+        
+        win.after(100, win.lift)
+        win.mainloop()
+
     def validate_name(text):
         if len(text) > 30:
             return False
@@ -1067,24 +1347,14 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
         else:
             rollEntry.configure(border_color=("#979DA2", "#565B5E"))
             rollok = True
-
-    def DOBValidator(text):
-        if text.isdigit() or text == "" or "/" in text:
-            return True
-        else:
-            return False
-    
-    def DOBElementValidator(text):
-        global dobok
-        if text.count("/") != 2:
-            dobEntry.configure(border_color=("#FF0000", "#8B0000"))
-            dobok = False
-        else:
-            dobEntry.configure(border_color=("#979DA2", "#565B5E"))
-            dobok = True  
     
     def DOBFormatter(text):
-        _day, _month, _year = text.split("/")
+        if text == "":
+            return
+        try:
+            _day, _month, _year = text.split("/")
+        except ValueError:
+            return
         year = int(_year)
         month = int(_month)
         if month > 12:
@@ -1122,6 +1392,13 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
             event.widget.insert("0.0", content[:80])
     
     def update_student(old_data: list):
+        if idEntry.get() == "":
+            return messagebox.showerror("Error", "Student ID cannot be blank!")
+        if dobEntry.get() == "":
+            return messagebox.showerror("Error", "Date of Birth cannot be blank!")
+        if nameEntry.get() == "":
+            return messagebox.showerror("Error", "Name cannot be blank!")
+        DOBFormatter(dobEntry.get())
         new_data = [
             idEntry.get(), 
             f"{class_str}-{sectionCombobox.get().lower()}-{rollEntry.get()}",
@@ -1159,6 +1436,8 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
         idEntry.insert(0, data[0])
         idEntry.bind("<FocusOut>", lambda e: check_if_student_id_exists(int(idEntry.get())) if idEntry.get() not in ["", "Enter the Student ID", str(data[0])] else None)
         dobEntry.insert(0, data[3])
+        dobEntry.unbind("<FocusIn>")
+        dobEntry.bind("<FocusIn>", lambda e, date = dobEntry.get(): datepicker(int(date.split("/")[2]), int(date.split("/")[1]), int(date.split("/")[0])) if datepickerwin is None else [datepickerwin.focus_force(), datepickerwin.deiconify()])
         nameEntry.insert(0, data[2]) 
         classLabel = ctk.CTkLabel(root, text=f"Class: {class_str}", font=("Consolas", 14))
         classLabel.place(x=10, y=100)    
@@ -1174,6 +1453,13 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
         saveStudentButton.configure(text="Update", command=lambda: update_student(data))
 
     def save_student():
+        if idEntry.get() == "":
+            return messagebox.showerror("Error", "Student ID cannot be blank!")
+        if dobEntry.get() == "":
+            return messagebox.showerror("Error", "Date of Birth cannot be blank!")
+        if nameEntry.get() == "":
+            return messagebox.showerror("Error", "Name cannot be blank!")
+        DOBFormatter(dobEntry.get())
         database.add_student(
             idEntry.get(), 
             f"{class_str}-{sectionCombobox.get().lower()}-{rollEntry.get()}", 
@@ -1235,10 +1521,10 @@ def assignStudentWindow(window: ctk.CTk, class_str: str, data: list = None):
     fill_student_id()
     dobLabel = ctk.CTkLabel(root, text=f"Date of Birth:", font=("Consolas", 13, 'bold'))
     dobLabel.place(x=10, y=45)
-    dobEntry = ctk.CTkEntry(root, placeholder_text="DD/MM/YYYY", font=("Consolas", 12, 'bold'), height=18, border_width=1, width=120, validate="key", validatecommand=(root.register(DOBValidator), "%P"))
+    dobEntry = ctk.CTkEntry(root, placeholder_text="DD/MM/YYYY", font=("Consolas", 12, 'bold'), height=18, border_width=1, width=120)
     dobEntry.place(x=120, y=50)
-    dobEntry.bind("<KeyRelease>", lambda e: DOBElementValidator(dobEntry.get()) if dobEntry.get() != "DD/MM/YYYY" else None)
-    dobEntry.bind("<FocusOut>", lambda e: DOBFormatter(dobEntry.get()))
+    date = datetime.now()
+    dobEntry.bind("<FocusIn>", lambda e: datepicker(date.year, date.month, date.day) if datepickerwin is None else [datepickerwin.focus_force(), datepickerwin.deiconify()])
     nameLabel = ctk.CTkLabel(root, text="Name:", font=("Segoe UI", 19, 'bold'))
     nameLabel.place(x=10, y=70)
     nameEntry = ctk.CTkEntry(root, placeholder_text="Student Name", font=("Seoge UI", 17, 'bold'), border_width=1, width=300, height=25, validate="key", validatecommand=(root.register(validate_name), "%P"))
