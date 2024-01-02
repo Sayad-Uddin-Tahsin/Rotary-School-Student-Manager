@@ -8,6 +8,7 @@ import re
 from PIL import Image
 import _tkinter
 import os
+import atexit
 from tkinter import messagebox
 import json
 import darkdetect
@@ -20,6 +21,8 @@ from email.mime.multipart import MIMEMultipart
 import smtplib
 from tkcalendar import Calendar
 from datetime import datetime
+from multiprocessing import Process
+import subprocess
 
 path = os.path.dirname(os.path.realpath(__file__))
 
@@ -34,6 +37,145 @@ ctk.set_default_color_theme(color_theme)
 database = None
 assetsPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "Assets")
 current_version = "0.5"
+
+class Sound:
+    def __init__(self, s):
+        self.s = s
+
+    def __str__(self):
+        return self.s
+
+
+Default = Sound("ms-winsoundevent:Notification.Default")
+Silent = Sound("silent")
+def _run_ps(*, file='', command=''):
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+    cmd = ["powershell.exe", "-ExecutionPolicy", "Bypass"]
+    if file and command:
+        raise ValueError
+    elif file:
+        cmd.extend(["-file", file])
+    elif command:
+        cmd.extend(['-Command', command])
+    else:
+        raise ValueError
+
+    subprocess.Popen(
+        cmd,
+        # stdin, stdout, and stderr have to be defined here, because windows tries to duplicate these if not null
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,  # set to null because we don't need the output :)
+        stderr=subprocess.DEVNULL,
+        startupinfo=si
+    )
+
+TEMPLATE = r"""
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
+[Windows.UI.Notifications.ToastNotification, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+$Template = @"
+<toast {launch} duration="{duration}">
+    <visual>
+        <binding template="ToastImageAndText02">
+            <image id="1" src="{icon}" />
+            <text id="1"><![CDATA[{title}]]></text>
+            <text id="2"><![CDATA[{msg}]]></text>
+        </binding>
+    </visual>
+    <actions>
+        {actions}
+    </actions>
+    {audio}
+</toast>
+"@
+
+$SerializedXml = New-Object Windows.Data.Xml.Dom.XmlDocument
+$SerializedXml.LoadXml($Template)
+
+$Toast = [Windows.UI.Notifications.ToastNotification]::new($SerializedXml)
+$Toast.Tag = "{tag}"
+$Toast.Group = "{group}"
+
+$Notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("{app_id}")
+$Notifier.Show($Toast);
+"""
+
+class Notification(object):
+    def __init__(self,
+                 app_id: str,
+                 title: str,
+                 msg: str = "",
+                 icon: str = "",
+                 duration: str = 'short',
+                 launch: str = ''):
+        """
+        Construct a new notification
+
+        Args:
+            app_id: your app name, make it readable to your user. It can contain spaces, however special characters
+                    (eg. é) are not supported.
+            title: The heading of the toast.
+            msg: The content/message of the toast.
+            icon: An optional path to an image to display on the left of the title & message.
+                  Make sure the path is absolute.
+            duration: How long the toast should show up for (short/long), default is short.
+            launch: The url or callback to launch (invoked when the user clicks the notification)
+
+        Notes:
+            If you want to pass a callback to `launch` parameter,
+            please use `create_notification` from `Notifier` object
+
+        Raises:
+            ValueError: If the duration specified is not short or long
+        """
+
+        self.app_id = app_id
+        self.title = title
+        self.msg = msg
+        self.icon = icon
+        self.duration = duration
+        self.launch = launch
+        self.audio = Silent
+        self.tag = self.title
+        self.group = self.app_id
+        self.actions = []
+        self.script = ""
+        if duration not in ("short", "long"):
+            raise ValueError("Duration is not 'short' or 'long'")
+
+    def set_audio(self, sound: Sound, loop: bool):
+        """
+        Set the audio for the notification
+
+        Args:
+            sound: The audio to play when the notification is showing. Choose one from `winotify.audio` module,
+                   (eg. audio.Default). The default for all notification is silent.
+            loop: If True, the audio will play indefinitely until user click or dismis the notification.
+
+        """
+
+        self.audio = '<audio src="{}" loop="{}" />'.format(sound, str(loop).lower())
+
+    def show(self):
+        """
+        Show the toast
+        """
+        if self.actions:
+            self.actions = '\n'.join(self.actions)
+        else:
+            self.actions = ''
+
+        if self.audio == Silent:
+            self.audio = '<audio silent="true" />'
+
+        if self.launch:
+            self.launch = 'activationType="protocol" launch="{}"'.format(self.launch)
+
+        self.script = TEMPLATE.format(**self.__dict__)
+
+        _run_ps(command=self.script)
 
 def edit_data(key, value):
     with open(f"{path}/data.json", 'r') as f:
@@ -85,6 +227,15 @@ def create_worksheet() -> None:
     sheet.insert_row(["$Pin$", "6789:"], 2)
     sheet.insert_row(["Student ID", "Class-Roll", "Name", "Date of Birth", "Father's Name", "Father's Phone", "Mother's Name", "Mother's Phone", "Present Address", "Permanent Address"], 3)
 
+def error_handler(func):
+    def wrapper(*args, **kwargs):
+        try:
+            result = func(*args, **kwargs)
+            return result
+        except requests.exceptions.ConnectionError:
+            if messagebox.showerror("Connection Lost!", "Connection was lost! Please check your Internet Connection and try again!"):
+                exit(0)
+    return wrapper
 class Database():
     def __init__(self) -> None:
         scopes = [
@@ -100,10 +251,11 @@ class Database():
         self.spreadsheet = self.gc.open("Rotary School Student Data")
         self.sheet = self.spreadsheet.sheet1
 
-
+    @error_handler
     def get_all(self) -> list:
         return self.sheet.get()
     
+    @error_handler
     def get_classes(self) -> str:
         try:
             f = self.sheet.find("$Class$")
@@ -118,6 +270,7 @@ class Database():
             value = []
         return value
 
+    @error_handler
     def get_all_sections(self, class_str: str) -> list:
         try:
             data = self.sheet.col_values(2)
@@ -135,6 +288,7 @@ class Database():
         sections.sort()
         return sections
     
+    @error_handler
     def get_student_amount_by_class(self) -> dict:
         try:
             data = self.sheet.col_values(2)
@@ -155,6 +309,7 @@ class Database():
                 
         return student_dict
 
+    @error_handler
     def get_student_amount_by_section(self, class_str: str) -> dict:
         try:
             data = self.sheet.col_values(2)
@@ -178,6 +333,7 @@ class Database():
                 student_dict[_section] = 1
         return student_dict
 
+    @error_handler
     def get_all_students_amount(self) -> int:
         try:
             data = self.sheet.col_values(2)
@@ -189,6 +345,7 @@ class Database():
 
         return len(data)
 
+    @error_handler
     def add_class(self, class_str: str) -> None:
         try:
             f = self.sheet.find("$Class$")
@@ -208,6 +365,7 @@ class Database():
         value = ", ".join(value)
         self.sheet.update_cell(f.row, f.col + 1, f"\"{value}\"")
     
+    @error_handler
     def get_all_student_data_by_class_and_section(self, class_str: str) -> dict:
         _class = class_str.split("-")[0]
         _section = class_str.split("-")[1]
@@ -230,6 +388,7 @@ class Database():
             all_student_data[str(student[1]).split("-")[2]] = student_data
         return all_student_data
 
+    @error_handler
     def get_all_student_data(self) -> dict:
         try:
             all_data = self.get_all()
@@ -247,6 +406,7 @@ class Database():
             all_student_data[str(student[1]).split("-")[2]] = student_data
         return all_student_data
     
+    @error_handler
     def get_student_data(self, position: str) -> dict:
         try:
             f = self.sheet.find(position)
@@ -268,9 +428,11 @@ class Database():
         student_data['mothersPhone'] = str(data[7]).replace("\"", '')
         student_data['presentAddress'] = data[8]
         student_data['permanentAddress'] = data[9]
+        student_data['paymentTimeline'] = data[10].replace("\"", "")
 
         return data, student_data
 
+    @error_handler
     def delete_class(self, class_str: str) -> None:
         try:
             f = self.sheet.find("$Class$")
@@ -295,6 +457,7 @@ class Database():
                 _find = self.sheet.find(value)
                 self.sheet.delete_rows(_find.row)
 
+    @error_handler
     def delete_section(self, section_with_class: str) -> None:
         class_str, section_str = section_with_class.split("-")[0], section_with_class.split("-")[1].lower()
         all_values = self.sheet.col_values(2)
@@ -303,28 +466,93 @@ class Database():
         for value in all_values:
             if str(value).split("-")[0] == class_str and str(value).split("-")[1] == section_str:
                 _find = self.sheet.find(value)
-                self.sheet.delete_rows(_find.row) 
+                self.sheet.delete_rows(_find.row)
 
-    def delete_student(self, class_position: str) -> None:
+    def roll_merge(self, rolls, _class, _section):
+        def merge_numbers_and_dict(numbers) -> dict:
+            length = len(numbers)
+            sorted_numbers = range(1, length + 1)
+            mismatches_dict = {}
+            for i, n in enumerate(numbers):
+                if sorted_numbers[i] == n:
+                    pass
+                else:
+                    mismatches_dict[n] = sorted_numbers[i]
+            return mismatches_dict
+        
+        merge_dict = merge_numbers_and_dict(rolls)
+        try:
+            scopes = [
+            'https://www.googleapis.com/auth/spreadsheets',
+            'https://www.googleapis.com/auth/drive'
+            ]
+
+            gc = gspread.service_account_from_dict(
+                get_creds(),
+                scopes=scopes
+            )
+
+            spreadsheet = gc.open("Rotary School Student Data")
+            sheet = spreadsheet.sheet1
+            edit_data("isMerging", True)
+            atexit.register(lambda: edit_data("isMerging", False))
+            def update_roll(p, n):
+                try:
+                    _find = sheet.find(f"{_class}-{_section}-{p}")
+                    sheet.update_cell(_find.row, 2, f"{_class}-{_section}-{n}")
+                    time.sleep(1)
+                except gspread.exceptions.APIError:
+                    time.sleep(60)
+                    update_roll()
+                except AttributeError as e:
+                    if e == "'NoneType' object has no attribute 'row'":
+                        update_roll(p, n)
+                    else:
+                        print(f"\"{e}\"")
+            
+            for p in merge_dict:
+                update_roll(p, merge_dict[p])
+            edit_data("isMerging", False)
+            n = Notification("Rotary School Student Manager", "Roll Merging Completed!", f"Roll merging for {_class}/{_section.capitalize()} has been completed!", f"{assetsPath}/Icon.ico")
+            n.set_audio(Default, False)
+            n.show()
+        except requests.exceptions.ConnectionError:
+            if messagebox.showerror("Connection Lost!", "Connection was lost! Please check your Internet Connection and try again!"):
+                exit(0)
+
+    @error_handler
+    def delete_student(self, class_position: str, merge: bool=True) -> None:
         _find = self.sheet.find(class_position)
+        _class, _section, _roll = class_position.split("-")
+        rolls = self.get_rolls(_class, _section)
+        rolls.remove(int(_roll))
         self.sheet.delete_rows(_find.row)
+        if merge:
+            bg = Process(target=self.roll_merge, args=(rolls, _class, _section))
+            bg.start()
+            n = Notification("Rotary School Student Manager", "Roll Merging in Progress...", f"Software is merging the rolls of {_class}/{_section.capitalize()}!\nDo not turn off this computer and avoid any other removal on {_class}/{_section.capitalize()}, you'll be notified once completed!", f"{assetsPath}/Icon.ico")
+            n.set_audio(Default, False)
+            n.show()
     
+    @error_handler
     def get_pin(self) -> str:
         _find = self.sheet.find("$Pin$")
         return (self.sheet.cell(_find.row, _find.col + 1).value).replace("\"", '')
     
+    @error_handler
     def get_rolls(self, class_str: str, section_str: str) -> list:
         all_values = self.sheet.col_values(2)
         all_values = all_values[all_values.index("Class-Roll") + 1:]
         all_values = [i for i in all_values if i]
-        roles = []
+        rolls = []
         for data in all_values:
             _class, _section, _roll = str(data).split("-")
             if _class.lower() == class_str.lower() and _section.lower() == section_str.lower():
-                roles.append(int(_roll))
-        roles.sort()
-        return roles
+                rolls.append(int(_roll))
+        rolls.sort()
+        return rolls
 
+    @error_handler
     def get_all_student_ids(self) -> list:
         all_ids = self.sheet.col_values(1)
         all_ids = all_ids[all_ids.index("Student ID") + 1:]
@@ -332,6 +560,7 @@ class Database():
         all_ids.sort()
         return all_ids
 
+    @error_handler
     def get_classes_have_data(self) -> list:
         all_values = self.sheet.col_values(2)
         all_values = all_values[all_values.index("Class-Roll") + 1:]
@@ -344,6 +573,7 @@ class Database():
         classes.sort()
         return classes
     
+    @error_handler
     def add_student(self, student_id: str, class_section_roll: str, name: str, DoB: str, fathersname: str, fatherscontact: str, mothersname: str, motherscontact: str, presentaddress: str, permanentaddress: str) -> None:
         data = [student_id, class_section_roll, name, DoB, fathersname, fatherscontact, mothersname, motherscontact, presentaddress, permanentaddress]
         gclass, gsection, groll = str(class_section_roll).split("-")
@@ -398,13 +628,15 @@ class Database():
                     self.sheet.insert_row(data, _find.row)
         else:
             self.sheet.append_row(data)
-    
+
+    @error_handler
     def update_student(self, data) -> None:
         class_section_roll = data[1]
         _find = self.sheet.find(class_section_roll)
         self.sheet.delete_rows(_find.row)
         self.sheet.insert_row(data, _find.row)
-    
+
+    @error_handler
     def change_pin(self, new_pin) -> None:
         pE = ""
         for c in new_pin:
@@ -1646,7 +1878,7 @@ def sectionWindow(window: ctk.CTk, class_str: str=None):
         if messagebox.askyesnocancel("Hold on! ", f"Are you sure you want to remove class {class_str} with all the assigned students and sections?"):
             database.delete_class(class_str)
             messagebox.showinfo("Execution Completed!", f"Class {class_str} has been removed successfully!")
-            root.after(1000, lambda: main(root))
+            root.after(500, lambda: main(root))
 
     window.destroy()
     root = ctk.CTk()
@@ -1727,7 +1959,7 @@ def sectionStudentWindow(window: ctk.CTk, class_str: str, section_str: str):
         if messagebox.askyesnocancel("Hold on! ", f"Are you sure you want to remove section {class_str}/{section_str.title()} with all the assigned students?"):
             database.delete_section(f"{class_str}-{section_str.lower()}")
             messagebox.showinfo("Execution Completed!", f"Section {class_str}/{section_str.title()} has been removed successfully!")
-            root.after(1000, lambda: sectionWindow(root, class_str))
+            root.after(500, lambda: sectionWindow(root, class_str))
     
     def search():
         text = searchEntry.get()
@@ -1821,9 +2053,25 @@ def studentWindow(window: ctk.CTk, class_position: str):
     
     def delete_student():
         if messagebox.askyesnocancel("Hold on! ", f"Are you sure you want to remove {data['name'].title()} from class {class_position.split('-')[0]}/{class_position.split('-')[1].title()}?"):
-            database.delete_student(class_position)
+            with open(f"{path}/data.json", "r") as f:
+                db = json.load(f)
+            _class = class_position.split('-')[0]
+            sections = database.get_all_sections(_class)
+            section = class_position.split('-')[1]
+
+            if db["isMerging"]:
+                if messagebox.askyesnocancel("Roll Merging not available!", f"Roll Merging for {_class}/{section.capitalize()} is currently unavailable because a roll merging process is already in progress. If you proceed to delete this student, the roll merging will not take place. Do you still want to delete the student?"):
+                    pass
+                else:
+                    return
+            database.delete_student(class_position, False if db["isMerging"] else True)
             messagebox.showinfo("Execution Completed!", f"{data['name'].title()} has been removed successfully!")
-            root.after(1000, lambda: sectionStudentWindow(root, class_position.split('-')[0], class_position.split('-')[1]))
+
+            if section.lower() in sections:
+                root.after(500, lambda: sectionStudentWindow(root, _class, section))
+            else:
+                root.after(500, lambda: sectionWindow(root, _class))
+
     
     aboutLabel = ctk.CTkLabel(root, text="Rotary School Student Manager", font=("Consolas", 12))
     aboutLabel.pack(anchor="se", side="bottom", padx=10)
@@ -1891,7 +2139,6 @@ def studentWindow(window: ctk.CTk, class_position: str):
     permanentAddressFrameName.place(x=340, y=285)
     permanentAddressLabel = ctk.CTkLabel(permanentAddressFrame, text=data['permanentAddress'], font=("Segoe UI", 13), justify="left", wraplength=290)
     permanentAddressLabel.place(x=10, y=10)
-
     backButton = ctk.CTkButton(root, text="🢀", font=("Segoe UI", 13, "bold"), width=28, height=25, command=lambda: sectionStudentWindow(root, class_position.split("-")[0], class_position.split("-")[1]))
     backButton.place(x=2, y=2)
 
