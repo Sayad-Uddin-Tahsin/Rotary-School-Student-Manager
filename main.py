@@ -36,7 +36,7 @@ ctk.set_default_color_theme(color_theme)
 
 database = None
 assetsPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "Assets")
-current_version = "0.5"
+current_version = "1.0"
 
 class Sound:
     def __init__(self, s):
@@ -204,6 +204,7 @@ def create_spreadsheet() -> None:
         scopes=scopes
     )
     spreadsheet = gc.create("Rotary School Student Data")
+    spreadsheet.share('mr.pluto012@gmail.com', perm_type='user', role='writer')
     sheet = spreadsheet.sheet1
     sheet.resize(380000)
     sheet.insert_row(["$Class$", "\"\""], 1)
@@ -236,6 +237,8 @@ def error_handler(func):
             if messagebox.showerror("Connection Lost!", "Connection was lost! Please check your Internet Connection and try again!"):
                 exit(0)
     return wrapper
+
+
 class Database():
     def __init__(self) -> None:
         scopes = [
@@ -468,71 +471,16 @@ class Database():
                 _find = self.sheet.find(value)
                 self.sheet.delete_rows(_find.row)
 
-    def roll_merge(self, rolls, _class, _section):
-        def merge_numbers_and_dict(numbers) -> dict:
-            length = len(numbers)
-            sorted_numbers = range(1, length + 1)
-            mismatches_dict = {}
-            for i, n in enumerate(numbers):
-                if sorted_numbers[i] == n:
-                    pass
-                else:
-                    mismatches_dict[n] = sorted_numbers[i]
-            return mismatches_dict
-        
-        merge_dict = merge_numbers_and_dict(rolls)
-        try:
-            scopes = [
-            'https://www.googleapis.com/auth/spreadsheets',
-            'https://www.googleapis.com/auth/drive'
-            ]
-
-            gc = gspread.service_account_from_dict(
-                get_creds(),
-                scopes=scopes
-            )
-
-            spreadsheet = gc.open("Rotary School Student Data")
-            sheet = spreadsheet.sheet1
-            edit_data("isMerging", True)
-            atexit.register(lambda: edit_data("isMerging", False))
-            def update_roll(p, n):
-                try:
-                    _find = sheet.find(f"{_class}-{_section}-{p}")
-                    sheet.update_cell(_find.row, 2, f"{_class}-{_section}-{n}")
-                    time.sleep(1)
-                except gspread.exceptions.APIError:
-                    time.sleep(60)
-                    update_roll()
-                except AttributeError as e:
-                    if e == "'NoneType' object has no attribute 'row'":
-                        update_roll(p, n)
-                    else:
-                        print(f"\"{e}\"")
-            
-            for p in merge_dict:
-                update_roll(p, merge_dict[p])
-            edit_data("isMerging", False)
-            n = Notification("Rotary School Student Manager", "Roll Merging Completed!", f"Roll merging for {_class}/{_section.capitalize()} has been completed!", f"{assetsPath}/Icon.ico")
-            n.set_audio(Default, False)
-            n.show()
-        except requests.exceptions.ConnectionError:
-            if messagebox.showerror("Connection Lost!", "Connection was lost! Please check your Internet Connection and try again!"):
-                exit(0)
-
     @error_handler
-    def delete_student(self, class_position: str, merge: bool=True) -> None:
+    def delete_student(self, class_position: str) -> None:
         _find = self.sheet.find(class_position)
         _class, _section, _roll = class_position.split("-")
         rolls = self.get_rolls(_class, _section)
-        rolls.remove(int(_roll))
         self.sheet.delete_rows(_find.row)
-        if merge:
-            bg = Process(target=self.roll_merge, args=(rolls, _class, _section))
-            bg.start()
-            n = Notification("Rotary School Student Manager", "Roll Merging in Progress...", f"Software is merging the rolls of {_class}/{_section.capitalize()}!\nDo not turn off this computer and avoid any other removal on {_class}/{_section.capitalize()}, you'll be notified once completed!", f"{assetsPath}/Icon.ico")
-            n.set_audio(Default, False)
-            n.show()
+        _last_roll_find = self.sheet.find(f"{_class}-{_section}-{str(rolls[-1])}")
+        correction_range = f"{_find.address}:{_last_roll_find.address}"
+        corrected_rolls = [[f"{_class}-{_section}-{roll}"] for roll in range(rolls[rolls.index(int(_roll))], rolls[-1])]
+        self.sheet.update(corrected_rolls, correction_range)
     
     @error_handler
     def get_pin(self) -> str:
@@ -791,7 +739,7 @@ def ReportErrorSequence(win: ctk.CTk, subject: str, type: str, filename: str, li
         mail = smtplib.SMTP('smtp.gmail.com', 587)
         mail.ehlo()
         mail.starttls()
-        mail.login('mr.pluto012@gmail.com', 'aebhdtqazepfvtqn')
+        mail.login('mr.pluto012@gmail.com', '')
         mail.sendmail(email_data['From'], "tahsin.ict@outlook.com", email_data.as_string())
         mail.quit()
     win.destroy()
@@ -929,7 +877,11 @@ def dbloadWin(window):
             loadingLabel.configure(text=f"Database Credentials Error!")
             if messagebox.askyesno("Credentials Error", "Credentials error usually raised when the  Database credentials are not correct! Please contact with the Developer!\nDo you want to send him Mail?"):
                 webbrowser.open("mailto:tahsin.ict@outlook.com?subject=Credendials Error on Rotary School Student Manager&body=%0A%0ARedirected from Rotary School Student Manager Software")
-            istypewrite = False
+        except FileNotFoundError as e:
+            if str(e) == "[Errno 2] No such file or directory: 'creds.txt'":
+                loadingLabel.configure(text=f"Database Credentials Not Found!")
+                loadingLabel.configure(text=f"Database Credentials Not Found!")
+                loadingLabel.configure(text=f"Database Credentials Not Found!")
         except Exception as e:
             istypewrite = False
             win.bell()
@@ -2053,18 +2005,11 @@ def studentWindow(window: ctk.CTk, class_position: str):
     
     def delete_student():
         if messagebox.askyesnocancel("Hold on! ", f"Are you sure you want to remove {data['name'].title()} from class {class_position.split('-')[0]}/{class_position.split('-')[1].title()}?"):
-            with open(f"{path}/data.json", "r") as f:
-                db = json.load(f)
             _class = class_position.split('-')[0]
             sections = database.get_all_sections(_class)
             section = class_position.split('-')[1]
 
-            if db["isMerging"]:
-                if messagebox.askyesnocancel("Roll Merging not available!", f"Roll Merging for {_class}/{section.capitalize()} is currently unavailable because a roll merging process is already in progress. If you proceed to delete this student, the roll merging will not take place. Do you still want to delete the student?"):
-                    pass
-                else:
-                    return
-            database.delete_student(class_position, False if db["isMerging"] else True)
+            database.delete_student(class_position)
             messagebox.showinfo("Execution Completed!", f"{data['name'].title()} has been removed successfully!")
 
             if section.lower() in sections:
