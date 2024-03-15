@@ -739,7 +739,7 @@ def ReportErrorSequence(win: ctk.CTk, subject: str, type: str, filename: str, li
         mail = smtplib.SMTP('smtp.gmail.com', 587)
         mail.ehlo()
         mail.starttls()
-        mail.login('mr.pluto012@gmail.com', '')
+        mail.login('mr.pluto012@gmail.com', 'gsuatadfkrflyjgh')
         mail.sendmail(email_data['From'], "tahsin.ict@outlook.com", email_data.as_string())
         mail.quit()
     win.destroy()
